@@ -1,0 +1,68 @@
+# Introduction to DEMO101: Artificial Intelligence Fundamentals
+
+## Course Overview
+
+DEMO101 provides a comprehensive introduction to the field of Artificial Intelligence (AI). This course covers the fundamental concepts, techniques, and applications of AI with a focus on modern approaches.
+
+## Learning Objectives
+
+By the end of this course, students will be able to:
+- Understand key AI concepts and terminology
+- Explain different machine learning paradigms
+- Implement basic neural networks
+- Apply natural language processing techniques
+- Develop retrieval-augmented generation systems
+- Evaluate AI systems for effectiveness and ethics
+
+## Key Topics
+
+### 1. Introduction to Artificial Intelligence
+- History and evolution of AI
+- Types of AI: narrow vs. general AI
+- Key applications in modern society
+- Ethical considerations and responsible AI
+
+### 2. Machine Learning Fundamentals
+- Supervised learning
+- Unsupervised learning
+- Reinforcement learning
+- Feature engineering and selection
+- Model evaluation and validation
+
+### 3. Neural Networks
+- Perceptrons and multilayer networks
+- Activation functions
+- Backpropagation
+- Deep learning architectures
+- Transfer learning
+
+### 4. Natural Language Processing
+- Text preprocessing and tokenization
+- Word embeddings
+- Recurrent neural networks
+- Transformer models
+- Large language models
+
+### 5. Retrieval-Augmented Generation
+- Vector embeddings
+- Semantic search
+- Knowledge retrieval systems
+- Context incorporation techniques
+- Enhancing LLMs with external knowledge
+
+## Final Project
+
+The course culminates in a final project where students will build a simple AI system that can answer questions based on a knowledge base. This project will integrate concepts from retrieval systems and language generation.
+
+## Assessment
+
+- Weekly assignments: 40%
+- Midterm exam: 20%
+- Final project: 30%
+- Participation: 10%
+
+## Required Reading
+
+- Russell, S. & Norvig, P. "Artificial Intelligence: A Modern Approach"
+- Goodfellow, I., Bengio, Y., & Courville, A. "Deep Learning"
+- Jurafsky, D. & Martin, J. "Speech and Language Processing" 

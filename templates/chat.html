@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ellie - {{ course_id }} | CMU AI Teaching Assistant</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/favicon.svg">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        body {
+            background-color: #f5f5f5;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        .header {
+            background-color: #1a237e;
+            color: white;
+            padding: 1rem 0;
+        }
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 1rem;
+            max-height: calc(100vh - 250px);
+        }
+        .message {
+            border-radius: 1rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            max-width: 80%;
+            position: relative;
+        }
+        .user-message {
+            background-color: #e3f2fd;
+            margin-left: auto;
+            border-bottom-right-radius: 0;
+        }
+        .assistant-message {
+            background-color: #ffffff;
+            margin-right: auto;
+            border-bottom-left-radius: 0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .message-time {
+            font-size: 0.7rem;
+            color: #999;
+            text-align: right;
+            margin-top: 0.5rem;
+        }
+        .footer {
+            background-color: #ffffff;
+            padding: 1rem;
+            border-top: 1px solid #e0e0e0;
+        }
+        .input-group {
+            background-color: #ffffff;
+            border-radius: 2rem;
+            overflow: hidden;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .form-control {
+            border: none;
+            padding: 0.75rem 1.5rem;
+        }
+        .form-control:focus {
+            box-shadow: none;
+        }
+        .btn-primary {
+            background-color: #1a237e;
+            border-color: #1a237e;
+            border-radius: 2rem;
+            padding: 0.75rem 1.5rem;
+        }
+        .btn-outline-secondary {
+            border-color: #e0e0e0;
+            color: #757575;
+        }
+        .btn-outline-secondary:hover {
+            background-color: #f5f5f5;
+            color: #424242;
+        }
+        .thinking {
+            display: flex;
+            align-items: center;
+            font-style: italic;
+            color: #757575;
+            margin-bottom: 1rem;
+        }
+        .thinking .dots {
+            display: flex;
+            margin-left: 0.5rem;
+        }
+        .thinking .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: #757575;
+            margin: 0 2px;
+            animation: dot-flashing 1s infinite alternate;
+        }
+        .thinking .dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+        .thinking .dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+        @keyframes dot-flashing {
+            0% {
+                opacity: 0.2;
+            }
+            100% {
+                opacity: 1;
+            }
+        }
+        .navbar-brand {
+            font-weight: bold;
+        }
+        .code-block {
+            background-color: #f8f9fa;
+            padding: 0.5rem;
+            border-radius: 0.25rem;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .feedback-buttons {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 0.5rem;
+        }
+        .feedback-rating {
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #ccc;
+            transition: color 0.2s;
+        }
+        .feedback-rating:hover,
+        .feedback-rating.active {
+            color: #ffc107;
+        }
+        .feedback-form {
+            margin-top: 1rem;
+            display: none;
+        }
+        /* Split View Layout */
+        .split-container {
+            display: flex;
+            height: calc(100vh - 100px);
+            overflow: hidden;
+        }
+        
+        .chat-side {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #e0e0e0;
+        }
+        
+        .document-side {
+            width: 0;
+            overflow: auto;
+            background-color: white;
+            transition: width 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .document-side.active {
+            width: 50%;
+            border-left: 1px solid #e0e0e0;
+        }
+        
+        .document-header {
+            background-color: var(--accent-blue);
+            color: white;
+            padding: 1rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .document-content {
+            flex: 1;
+            padding: 1rem;
+            overflow: auto;
+        }
+        
+        .document-img {
+            max-width: 100%;
+        }
+        
+        .reference-badge {
+            display: inline-block;
+            padding: 0.2rem 0.4rem;
+            margin: 0 0.2rem;
+            background-color: var(--cmu-light-gray);
+            color: var(--cmu-red);
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            border: 1px solid var(--cmu-gray);
+        }
+        
+        .reference-badge:hover {
+            background-color: var(--cmu-red);
+            color: white;
+        }
+        
+        .document-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 1rem;
+            background-color: #f5f5f5;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .document-navigation {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .document-page-info {
+            font-size: 0.9rem;
+            color: var(--cmu-gray);
+        }
+        
+        .toggle-document-btn {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            z-index: 1000;
+            background-color: var(--cmu-red);
+            color: white;
+            border: none;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .split-container {
+                flex-direction: column;
+                height: auto;
+            }
+            
+            .chat-side {
+                flex: none;
+                height: calc(100vh - 100px);
+                border-right: none;
+                border-bottom: 1px solid #e0e0e0;
+            }
+            
+            .document-side.active {
+                width: 100%;
+                height: calc(100vh - 100px);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-transition"></div>
+    <nav class="navbar navbar-expand-lg navbar-dark header">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="bi bi-mortarboard-fill me-2"></i> Ellie
+            </a>
+            <span class="navbar-text text-white ms-3">
+                <i class="bi bi-book me-2"></i>{{ course_id }}
+            </span>
+            <div class="ms-auto d-flex align-items-center">
+                <button id="updateMaterialsBtn" class="btn btn-outline-light me-2" title="Update course materials">
+                    <i class="bi bi-arrow-clockwise me-1"></i> Update Materials
+                </button>
+                <button id="clearHistoryBtn" class="btn btn-outline-light me-2" title="Clear conversation history">
+                    <i class="bi bi-trash me-1"></i> Clear History
+                </button>
+                <a href="/" class="btn btn-outline-light" title="Return to course selection">
+                    <i class="bi bi-house-door me-1"></i> Home
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="split-container">
+        <div class="chat-side">
+            <div class="chat-container">
+                <div class="messages-container" id="messages">
+                    <div class="assistant-message">
+                        <h5>Ellie</h5>
+                        <p>Hello! I'm Ellie, your AI Teaching Assistant for {{ course_id }}. How can I help you today?</p>
+                        <div class="message-time" id="current-time"></div>
+                    </div>
+                </div>
+                <div id="thinking" class="thinking d-none">
+                    <span>Ellie is thinking</span>
+                    <div class="dots">
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                    </div>
+                </div>
+                <form id="question-form" class="mt-2">
+                    <div class="input-group">
+                        <input type="text" id="question" class="form-control" placeholder="Ask a question about {{ course_id }}..."
+                            required>
+                        <button class="btn btn-primary" type="submit">
+                            <i class="bi bi-send"></i>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="document-side" id="documentSide">
+            <div class="document-header">
+                <h5 id="documentTitle">Source Material</h5>
+                <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-3" 
+                    id="closeDocumentBtn" aria-label="Close"></button>
+            </div>
+            <div class="document-toolbar">
+                <div class="document-navigation">
+                    <button class="btn btn-sm btn-outline-secondary" id="prevBtn">
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+                    <span class="document-page-info" id="pageInfo">Page 1 of 1</span>
+                    <button class="btn btn-sm btn-outline-secondary" id="nextBtn">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+                <div>
+                    <button class="btn btn-sm btn-outline-primary" id="downloadBtn">
+                        <i class="bi bi-download"></i> Download
+                    </button>
+                </div>
+            </div>
+            <div class="document-content" id="documentContent">
+                <div class="text-center my-5">
+                    <p>Select a reference to view the source material</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <button class="toggle-document-btn" id="toggleDocumentBtn" title="Toggle Document View">
+        <i class="bi bi-book"></i>
+    </button>
+
+    <!-- Multi-modal Content Viewer -->
+    <div class="modal fade" id="contentViewerModal" tabindex="-1" aria-labelledby="contentViewerModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="contentViewerModalLabel">Source Content</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <ul class="nav nav-tabs" id="contentTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="document-tab" data-bs-toggle="tab" data-bs-target="#document-content" type="button" role="tab">
+                                <i class="bi bi-file-text"></i> Document
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="video-tab" data-bs-toggle="tab" data-bs-target="#video-content" type="button" role="tab">
+                                <i class="bi bi-play-circle"></i> Video
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="code-tab" data-bs-toggle="tab" data-bs-target="#code-content" type="button" role="tab">
+                                <i class="bi bi-code-square"></i> Code
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="math-tab" data-bs-toggle="tab" data-bs-target="#math-content" type="button" role="tab">
+                                <i class="bi bi-calculator"></i> Math
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="data-tab" data-bs-toggle="tab" data-bs-target="#data-content" type="button" role="tab">
+                                <i class="bi bi-table"></i> Data
+                            </button>
+                        </li>
+                    </ul>
+                    <div class="tab-content p-3" id="contentTabContent">
+                        <!-- Document Content -->
+                        <div class="tab-pane fade show active" id="document-content" role="tabpanel">
+                            <div class="content-controls mb-3">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <button class="btn btn-sm btn-outline-secondary" id="documentPrevBtn">
+                                            <i class="bi bi-chevron-left"></i> Previous
+                                        </button>
+                                        <span class="mx-2" id="documentPageInfo">Page 1 of 1</span>
+                                        <button class="btn btn-sm btn-outline-secondary" id="documentNextBtn">
+                                            Next <i class="bi bi-chevron-right"></i>
+                                        </button>
+                                    </div>
+                                    <div>
+                                        <button class="btn btn-sm btn-outline-primary" id="documentDownloadBtn">
+                                            <i class="bi bi-download"></i> Download
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="document-content-area" id="documentContentArea"></div>
+                        </div>
+                        
+                        <!-- Video Content -->
+                        <div class="tab-pane fade" id="video-content" role="tabpanel">
+                            <div class="content-controls mb-3">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <span id="videoTimestamp">00:00:00</span>
+                                    </div>
+                                    <div>
+                                        <button class="btn btn-sm btn-outline-primary" id="videoDownloadBtn">
+                                            <i class="bi bi-download"></i> Download
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="video-content-area" id="videoContentArea">
+                                <video id="videoPlayer" controls class="w-100"></video>
+                                <div class="transcript mt-3" id="videoTranscript"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Code Content -->
+                        <div class="tab-pane fade" id="code-content" role="tabpanel">
+                            <div class="content-controls mb-3">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <span id="codeInfo"></span>
+                                    </div>
+                                    <div>
+                                        <button class="btn btn-sm btn-outline-primary" id="copyCodeBtn">
+                                            <i class="bi bi-clipboard"></i> Copy
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-primary" id="codeDownloadBtn">
+                                            <i class="bi bi-download"></i> Download
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="code-content-area" id="codeContentArea">
+                                <pre><code id="codeDisplay"></code></pre>
+                            </div>
+                        </div>
+                        
+                        <!-- Math Content -->
+                        <div class="tab-pane fade" id="math-content" role="tabpanel">
+                            <div class="content-controls mb-3">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <span id="mathInfo"></span>
+                                    </div>
+                                    <div>
+                                        <button class="btn btn-sm btn-outline-primary" id="mathLatexBtn">
+                                            <i class="bi bi-code"></i> View LaTeX
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="math-content-area" id="mathContentArea"></div>
+                        </div>
+                        
+                        <!-- Data Content -->
+                        <div class="tab-pane fade" id="data-content" role="tabpanel">
+                            <div class="content-controls mb-3">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <span id="dataInfo"></span>
+                                    </div>
+                                    <div>
+                                        <button class="btn btn-sm btn-outline-primary" id="dataDownloadBtn">
+                                            <i class="bi bi-download"></i> Download
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="data-content-area" id="dataContentArea">
+                                <div class="table-responsive">
+                                    <table class="table table-striped" id="dataTable"></table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" id="fullscreenBtn">
+                        <i class="bi bi-fullscreen"></i> Fullscreen
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feedback Modal -->
+    <div class="modal fade" id="feedbackModal" tabindex="-1" aria-labelledby="feedbackModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="feedbackModalLabel">Rate Ellie's Response</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>How helpful was this response?</p>
+                    <div class="d-flex justify-content-center mb-3">
+                        <div class="mx-1 text-center">
+                            <i class="bi bi-star-fill feedback-rating" data-rating="1"></i>
+                            <div><small>Poor</small></div>
+                        </div>
+                        <div class="mx-1 text-center">
+                            <i class="bi bi-star-fill feedback-rating" data-rating="2"></i>
+                            <div><small></small></div>
+                        </div>
+                        <div class="mx-1 text-center">
+                            <i class="bi bi-star-fill feedback-rating" data-rating="3"></i>
+                            <div><small>OK</small></div>
+                        </div>
+                        <div class="mx-1 text-center">
+                            <i class="bi bi-star-fill feedback-rating" data-rating="4"></i>
+                            <div><small></small></div>
+                        </div>
+                        <div class="mx-1 text-center">
+                            <i class="bi bi-star-fill feedback-rating" data-rating="5"></i>
+                            <div><small>Great</small></div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="feedbackComment" class="form-label">Additional comments (optional)</label>
+                        <textarea class="form-control" id="feedbackComment" rows="3" placeholder="What can we improve?"></textarea>
+                    </div>
+                    <input type="hidden" id="feedbackQuestion">
+                    <input type="hidden" id="feedbackAnswer">
+                    <input type="hidden" id="feedbackRating">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="submitFeedbackBtn">Submit Feedback</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="/static/js/main.js"></script>
+    <script>
+        const courseId = "{{ course_id }}";
+        const messagesContainer = document.getElementById('messages');
+        const questionForm = document.getElementById('question-form');
+        const questionInput = document.getElementById('question');
+        const thinkingIndicator = document.getElementById('thinking');
+        const documentSide = document.getElementById('documentSide');
+        const documentContent = document.getElementById('documentContent');
+        const documentTitle = document.getElementById('documentTitle');
+        const pageInfo = document.getElementById('pageInfo');
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const toggleDocumentBtn = document.getElementById('toggleDocumentBtn');
+        const closeDocumentBtn = document.getElementById('closeDocumentBtn');
+        
+        // Current document state
+        let currentDocument = {
+            courseId: '',
+            docId: '',
+            page: 1,
+            totalPages: 1,
+            filePath: '',
+            fileName: '',
+            fileType: ''
+        };
+        
+        // Toggle document panel
+        toggleDocumentBtn.addEventListener('click', function() {
+            documentSide.classList.toggle('active');
+        });
+        
+        closeDocumentBtn.addEventListener('click', function() {
+            documentSide.classList.remove('active');
+        });
+        
+        // Handle document navigation
+        prevBtn.addEventListener('click', function() {
+            if (currentDocument.page > 1) {
+                currentDocument.page--;
+                loadDocumentPage();
+            }
+        });
+        
+        nextBtn.addEventListener('click', function() {
+            if (currentDocument.page < currentDocument.totalPages) {
+                currentDocument.page++;
+                loadDocumentPage();
+            }
+        });
+        
+        downloadBtn.addEventListener('click', function() {
+            if (currentDocument.filePath) {
+                const link = document.createElement('a');
+                link.href = `/api/document/download/${currentDocument.courseId}/${currentDocument.docId}`;
+                link.download = currentDocument.fileName;
+                link.click();
+            }
+        });
+        
+        // Load document by reference
+        function loadDocumentByRef(refInfo) {
+            const courseId = "{{ course_id }}";
+            const docId = refInfo.doc_id;
+            const pageOrSlide = refInfo.page_or_slide || 1;
+            
+            // Validate document ID
+            if (!docId || docId === "unknown") {
+                documentSide.classList.add('active');
+                documentContent.innerHTML = `
+                    <div class="alert alert-warning">
+                        <h5>Source Not Available</h5>
+                        <p>Sorry, the source material for this reference is not available.</p>
+                        <p>This might happen if the document wasn't properly indexed or has been removed.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Show document panel
+            documentSide.classList.add('active');
+            
+            // Set loading state
+            documentContent.innerHTML = '<div class="text-center my-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-3">Loading document...</p></div>';
+            
+            // Get document metadata
+            fetch(`/api/document/${courseId}/${docId}?page=${pageOrSlide}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Error ${response.status}: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+                    
+                    // Update current document state
+                    currentDocument = {
+                        courseId: courseId,
+                        docId: docId,
+                        page: data.page || data.slide || 1,
+                        totalPages: data.total_pages || data.total_slides || 1,
+                        filePath: data.file_path,
+                        fileName: data.file_name,
+                        fileType: data.file_type,
+                        title: data.title
+                    };
+                    
+                    // Update UI
+                    documentTitle.textContent = data.title || data.file_name;
+                    
+                    if (data.file_type === 'pdf') {
+                        pageInfo.textContent = `Page ${currentDocument.page} of ${currentDocument.totalPages}`;
+                    } else if (data.file_type === 'pptx') {
+                        pageInfo.textContent = `Slide ${currentDocument.page} of ${currentDocument.totalPages}`;
+                    } else {
+                        pageInfo.textContent = '';
+                    }
+                    
+                    // Load document content
+                    loadDocumentPage();
+                })
+                .catch(error => {
+                    documentContent.innerHTML = `
+                        <div class="alert alert-danger">
+                            <h5>Error Loading Document</h5>
+                            <p>${error.message}</p>
+                            <p>Please try again or contact support if the issue persists.</p>
+                        </div>`;
+                });
+        }
+        
+        function loadDocumentPage() {
+            // Update navigation buttons state
+            prevBtn.disabled = currentDocument.page <= 1;
+            nextBtn.disabled = currentDocument.page >= currentDocument.totalPages;
+            
+            // Update page info
+            if (currentDocument.fileType === 'pdf') {
+                pageInfo.textContent = `Page ${currentDocument.page} of ${currentDocument.totalPages}`;
+            } else if (currentDocument.fileType === 'pptx') {
+                pageInfo.textContent = `Slide ${currentDocument.page} of ${currentDocument.totalPages}`;
+            }
+            
+            // Set loading state
+            documentContent.innerHTML = '<div class="text-center my-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-3">Loading content...</p></div>';
+            
+            // Load document content based on type
+            if (currentDocument.fileType === 'pdf') {
+                // Load PDF as image
+                const imgElement = document.createElement('img');
+                imgElement.className = 'document-img';
+                imgElement.src = `/api/document/render/${currentDocument.courseId}/${currentDocument.docId}?page=${currentDocument.page}`;
+                imgElement.alt = `Page ${currentDocument.page}`;
+                
+                // Clear and add to container
+                documentContent.innerHTML = '';
+                documentContent.appendChild(imgElement);
+                
+                // Add text content below the image
+                fetch(`/api/document/content/${currentDocument.courseId}/${currentDocument.docId}?page=${currentDocument.page}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (!data.error && data.content) {
+                            const textDiv = document.createElement('div');
+                            textDiv.className = 'mt-4 p-3 bg-light rounded';
+                            textDiv.innerHTML = `<h6>Text Content:</h6><pre>${data.content}</pre>`;
+                            documentContent.appendChild(textDiv);
+                        }
+                    })
+                    .catch(error => console.error('Error fetching text content:', error));
+            } else if (currentDocument.fileType === 'pptx') {
+                // Load slide content
+                fetch(`/api/document/content/${currentDocument.courseId}/${currentDocument.docId}?slide=${currentDocument.page}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.error) {
+                            documentContent.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+                            return;
+                        }
+                        
+                        const slideContent = document.createElement('div');
+                        slideContent.className = 'slide-content p-4 bg-white rounded shadow-sm';
+                        
+                        if (data.title) {
+                            const titleElement = document.createElement('h3');
+                            titleElement.className = 'slide-title mb-4';
+                            titleElement.textContent = data.title;
+                            slideContent.appendChild(titleElement);
+                        }
+                        
+                        const contentElement = document.createElement('div');
+                        contentElement.className = 'slide-text';
+                        contentElement.innerHTML = data.content.replace(/\n/g, '<br>');
+                        slideContent.appendChild(contentElement);
+                        
+                        documentContent.innerHTML = '';
+                        documentContent.appendChild(slideContent);
+                    })
+                    .catch(error => {
+                        documentContent.innerHTML = `<div class="alert alert-danger">Error loading slide: ${error.message}</div>`;
+                    });
+            } else {
+                // Unsupported file type
+                documentContent.innerHTML = '<div class="alert alert-warning">Preview not available for this file type</div>';
+            }
+        }
+        
+        // Process markdown and add reference links
+        function processMarkdown(text) {
+            // Replace reference tags with clickable badges
+            const refRegex = /\[ref(\d+)\]/g;
+            const processedText = text.replace(refRegex, (match, refNum) => {
+                return `<span class="reference-badge" data-ref="${refNum}">${match}</span>`;
+            });
+            
+            // Parse markdown to HTML
+            return marked.parse(processedText);
+        }
+        
+        // Ask a question
+        questionForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const question = questionInput.value.trim();
+            if (!question) return;
+            
+            // Add user message
+            const userMessage = document.createElement('div');
+            userMessage.className = 'message user-message';
+            userMessage.innerHTML = `
+                <h5>You</h5>
+                <p>${question}</p>
+                <div class="message-time">${formatTime()}</div>
+            `;
+            messagesContainer.appendChild(userMessage);
+            
+            // Clear input and scroll to bottom
+            questionInput.value = '';
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            
+            // Show thinking indicator
+            thinkingIndicator.classList.remove('d-none');
+            
+            try {
+                // Send question to API
+                const response = await fetch('/api/ask', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        question: question,
+                        course_id: '{{ course_id }}'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                // Hide thinking indicator
+                thinkingIndicator.classList.add('d-none');
+                
+                if (data.error) {
+                    // Show error message
+                    const errorMessage = document.createElement('div');
+                    errorMessage.className = 'message assistant-message';
+                    errorMessage.innerHTML = `
+                        <h5>Ellie</h5>
+                        <p>Sorry, I encountered an error: ${data.error}</p>
+                        <div class="message-time">${formatTime()}</div>
+                    `;
+                    messagesContainer.appendChild(errorMessage);
+                } else {
+                    // Process response with references
+                    const assistantMessage = document.createElement('div');
+                    assistantMessage.className = 'message assistant-message';
+                    assistantMessage.innerHTML = `
+                        <h5>Ellie</h5>
+                        <div>${processMarkdown(data.answer)}</div>
+                        <div class="message-time">${formatTime()}</div>
+                    `;
+                    messagesContainer.appendChild(assistantMessage);
+                    
+                    // Store references data
+                    if (data.references && data.references.length > 0) {
+                        assistantMessage.dataset.references = JSON.stringify(data.references);
+                        
+                        // Add click event listeners to reference badges
+                        const refBadges = assistantMessage.querySelectorAll('.reference-badge');
+                        refBadges.forEach(badge => {
+                            badge.addEventListener('click', function() {
+                                const refNum = badge.dataset.ref;
+                                const references = JSON.parse(assistantMessage.dataset.references);
+                                const refInfo = references.find(ref => ref.id === `[ref${refNum}]`);
+                                
+                                if (refInfo) {
+                                    loadDocumentByRef(refInfo);
+                                }
+                            });
+                        });
+                    }
+                }
+                
+                // Scroll to bottom
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                
+            } catch (error) {
+                // Hide thinking indicator
+                thinkingIndicator.classList.add('d-none');
+                
+                // Show error message
+                const errorMessage = document.createElement('div');
+                errorMessage.className = 'message assistant-message';
+                errorMessage.innerHTML = `
+                    <h5>Ellie</h5>
+                    <p>Sorry, there was an error processing your request.</p>
+                    <div class="message-time">${formatTime()}</div>
+                `;
+                messagesContainer.appendChild(errorMessage);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+        });
+        
+        // Helper function to format time
+        function formatTime() {
+            const now = new Date();
+            return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+        
+        // Initialize the current time for the welcome message
+        const currentTimeElement = document.getElementById('current-time');
+        if (currentTimeElement) {
+            currentTimeElement.textContent = formatTime();
+        }
+        
+        // Initial load to get conversation history
+        fetch('/api/history?course_id={{ course_id }}')
+            .then(response => response.json())
+            .then(data => {
+                if (data.history && data.history.length) {
+                    // Clear welcome message if there's history
+                    messagesContainer.innerHTML = '';
+                    
+                    // Add conversation history
+                    data.history.forEach(msg => {
+                        const messageDiv = document.createElement('div');
+                        messageDiv.className = msg.role === 'user' ? 'message user-message' : 'message assistant-message';
+                        
+                        if (msg.role === 'user') {
+                            messageDiv.innerHTML = `
+                                <h5>You</h5>
+                                <p>${msg.content}</p>
+                                <div class="message-time">${formatTime(new Date(msg.timestamp))}</div>
+                            `;
+                        } else {
+                            messageDiv.innerHTML = `
+                                <h5>Ellie</h5>
+                                <div>${processMarkdown(msg.content)}</div>
+                                <div class="message-time">${formatTime(new Date(msg.timestamp))}</div>
+                            `;
+                            
+                            // Add references if available
+                            if (msg.references && msg.references.length > 0) {
+                                messageDiv.dataset.references = JSON.stringify(msg.references);
+                            }
+                        }
+                        
+                        messagesContainer.appendChild(messageDiv);
+                    });
+                    
+                    // Add click handlers for reference badges
+                    document.querySelectorAll('.reference-badge').forEach(badge => {
+                        badge.addEventListener('click', function() {
+                            const messageDiv = badge.closest('.message');
+                            if (messageDiv && messageDiv.dataset.references) {
+                                const refNum = badge.dataset.ref;
+                                const references = JSON.parse(messageDiv.dataset.references);
+                                const refInfo = references.find(ref => ref.id === `[ref${refNum}]`);
+                                
+                                if (refInfo) {
+                                    loadDocumentByRef(refInfo);
+                                }
+                            }
+                        });
+                    });
+                    
+                    // Scroll to bottom
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                }
+            })
+            .catch(error => console.error('Error loading history:', error));
+    </script>
+</body>
+</html> 

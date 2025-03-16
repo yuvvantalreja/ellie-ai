@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ellie - CMU AI Teaching Assistant</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/favicon.svg">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        body {
+            background-color: #f5f5f5;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .header {
+            background-color: #1a237e;
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+        }
+        .course-card {
+            transition: transform 0.3s;
+            margin-bottom: 1.5rem;
+        }
+        .course-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+        .main-container {
+            min-height: calc(100vh - 200px);
+        }
+        .footer {
+            background-color: #f5f5f5;
+            padding: 1rem 0;
+            margin-top: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="page-transition"></div>
+    <div class="header text-center">
+        <div class="container">
+            <h1 class="display-4"><i class="bi bi-mortarboard-fill me-2"></i>Ellie</h1>
+            <p class="lead">Carnegie Mellon University's AI Teaching Assistant</p>
+        </div>
+    </div>
+
+    <div class="container main-container">
+        <div class="row mb-5">
+            <div class="col-md-8 offset-md-2">
+                <div class="card">
+                    <div class="card-body text-center p-4">
+                        <h2 class="mb-3">Welcome to Ellie</h2>
+                        <p class="fs-5">I'm your personal AI teaching assistant for Carnegie Mellon University courses. I can help answer questions, explain concepts, and guide you through your coursework.</p>
+                        <p class="fs-5 mb-4">Select a course below to start chatting or create a new course.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-5">
+            <div class="col-md-8 offset-md-2">
+                <div class="card">
+                    <div class="card-body p-4">
+                        <h3 class="card-title mb-3"><i class="bi bi-plus-circle me-2"></i>Create New Course</h3>
+                        <form id="createCourseForm">
+                            <div class="mb-3">
+                                <label for="courseId" class="form-label">Course ID (e.g., 15-122, 18-100)</label>
+                                <input type="text" class="form-control" id="courseId" required placeholder="Enter CMU course ID">
+                                <div class="form-text">This will create a folder where you can add course materials.</div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-plus-lg me-1"></i> Create Course
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <h2 class="text-center mb-4"><i class="bi bi-book me-2"></i>Available Courses</h2>
+        
+        <div class="row" id="coursesList">
+            {% if courses %}
+                {% for course in courses %}
+                    <div class="col-md-4 mb-4">
+                        <div class="card course-card h-100">
+                            <div class="card-body d-flex flex-column">
+                                <h5 class="card-title"><i class="bi bi-mortarboard me-2"></i>{{ course }}</h5>
+                                <p class="card-text flex-grow-1">Get help with assignments, concepts, and course materials for {{ course }}.</p>
+                                <a href="/course/{{ course }}" class="btn btn-primary mt-3">
+                                    <i class="bi bi-chat-dots me-1"></i> Chat with Ellie
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="col-12 text-center">
+                    <div class="alert alert-info p-5">
+                        <i class="bi bi-info-circle fs-4 me-2"></i>
+                        <p class="mb-0 fs-5">No courses available yet. Create your first course to get started!</p>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <footer class="footer text-center">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-12">
+                    <p><i class="bi bi-mortarboard-fill me-2"></i>Ellie - Carnegie Mellon University AI Teaching Assistant</p>
+                    <p class="mb-0"><small>&copy; 2024 Carnegie Mellon University</small></p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/main.js"></script>
+    <script>
+        document.getElementById('createCourseForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const courseId = document.getElementById('courseId').value.trim();
+            
+            if (!courseId) {
+                customError('Please enter a valid Course ID');
+                return;
+            }
+            
+            fetch('/api/create_course', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ course_id: courseId }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    customSuccess(data.message);
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1500);
+                } else {
+                    customError('Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                customError('An error occurred. Please try again.');
+            });
+        });
+    </script>
+</body>
+</html> 

@@ -1,4 +1,4 @@
-# Ellie-AI
+# Ellie-AI (https://ellie-ai.onrender.com/)
 
 <img width="1470" alt="Screenshot 2025-03-17 at 6 24 07 PM" src="https://github.com/user-attachments/assets/dfb73b2b-6629-40f1-93f9-49228b412dc6" />
 

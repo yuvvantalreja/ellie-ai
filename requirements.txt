@@ -11,4 +11,5 @@ numpy
 requests
 docx2txt
 sentence-transformers
-gunicorn 
+gunicorn
+pandas 

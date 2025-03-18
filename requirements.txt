@@ -12,4 +12,7 @@ requests
 docx2txt
 sentence-transformers
 gunicorn
-pandas 
+pandas
+matplotlib
+pyyaml
+werkzeug 

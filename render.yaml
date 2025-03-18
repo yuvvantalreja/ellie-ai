@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: ellie-ai
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn web_app:app
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama3-70b-8192
+      - key: GROQ_VISION_MODEL
+        value: llama-3.2-90b-vision-preview
+      - key: MATERIALS_DIR
+        value: course_materials
+      - key: SECRET_KEY
+        generateValue: true 

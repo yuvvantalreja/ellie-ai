@@ -403,6 +403,31 @@ class CourseRAG:
         
         return "\n\n".join(context_docs), references
     
+    def get_context(self, query, user_id="anonymous", top_k=5):
+        """Retrieve context for a query without generating an answer
+        
+        Args:
+            query: The search query
+            user_id: Identifier for the user
+            top_k: Number of top documents to retrieve
+            
+        Returns:
+            Tuple of (context_text, references)
+        """
+        logger.info(f"Getting context for query in course {self.course_id}: {query}")
+        
+        try:
+            # Get conversation history
+            history = self.conversation_manager.get_conversation_history(self.course_id, user_id)
+            
+            # Retrieve context documents
+            context, references = self._retrieve_context(query, top_k)
+            
+            return context, references
+        except Exception as e:
+            logger.error(f"Error getting context: {str(e)}")
+            return "", []
+    
     def _build_rag_chain(self):
         """Build the RAG chain for answering questions"""
         

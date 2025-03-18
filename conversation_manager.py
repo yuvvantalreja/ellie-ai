@@ -52,7 +52,7 @@ class ConversationManager:
             return []
     
     def add_message(self, course_id: str, user_id: str, role: str, 
-                   content: str) -> None:
+                   content: str, references: Optional[List[Dict[str, Any]]] = None) -> None:
         """Add a message to the conversation history
         
         Args:
@@ -60,6 +60,7 @@ class ConversationManager:
             user_id: User identifier
             role: Message role ('user' or 'assistant')
             content: Message content
+            references: Optional list of reference dictionaries (docs, images, etc.)
         """
         file_path = self._get_user_file(course_id, user_id)
         
@@ -79,6 +80,11 @@ class ConversationManager:
             "content": content,
             "timestamp": time.time()
         }
+        
+        # Add references if provided
+        if references:
+            message["references"] = references
+            
         history.append(message)
         
         # Save updated history

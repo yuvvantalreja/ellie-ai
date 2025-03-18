@@ -10,150 +10,142 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <link rel="stylesheet" href="/static/css/style.css">
     <style>
-        body {
-            background-color: #f5f5f5;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            display: flex;
-            flex-direction: column;
-            min-height: 100vh;
-        }
+        /* Ensure header uses CMU colors */
         .header {
-            background-color: #1a237e;
+            background-color: var(--cmu-red);
+        }
+        
+        /* Ensure buttons use CMU colors */
+        .btn-primary {
+            background-color: var(--cmu-red);
+            border-color: var(--cmu-red);
+        }
+        
+        /* Send button specific styling */
+        #question-form .btn-primary {
+            background-color: var(--cmu-red);
+            border-color: var(--cmu-red);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            min-width: 45px;
+        }
+        
+        .btn-primary:hover, .btn-primary:focus {
+            background-color: var(--cmu-dark-red);
+            border-color: var(--cmu-dark-red);
+        }
+        
+        /* Improved input group styling */
+        .input-group {
+            border-radius: 2rem;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .input-group .form-control {
+            border-color: #ced4da;
+            border-right: none;
+            padding-left: 1.5rem;
+        }
+        
+        .input-group .form-control:focus {
+            box-shadow: none;
+        }
+        
+        .input-group .btn-primary {
+            border-top-right-radius: 2rem;
+            border-bottom-right-radius: 2rem;
+            padding: 0.5rem 1rem;
             color: white;
-            padding: 1rem 0;
+            z-index: 5;
         }
-        .chat-container {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 1rem;
+        
+        .input-group .input-group-text {
+            border-color: #ced4da;
+            background-color: transparent;
         }
-        .messages-container {
-            flex: 1;
-            overflow-y: auto;
-            margin-bottom: 1rem;
-            max-height: calc(100vh - 250px);
+        
+        .input-group .btn-outline-secondary {
+            border-color: #ced4da;
+            color: #6c757d;
         }
+        
+        .input-group .btn-outline-secondary:hover {
+            background-color: #f8f9fa;
+        }
+        
+        /* Fix message styling */
         .message {
             border-radius: 1rem;
             padding: 1rem;
-            margin-bottom: 1rem;
+            margin-bottom: 1.25rem;
             max-width: 80%;
             position: relative;
+            animation: fadeIn 0.3s ease-in-out;
         }
+        
         .user-message {
             background-color: #e3f2fd;
             margin-left: auto;
             border-bottom-right-radius: 0;
+            border-left: 3px solid var(--accent-blue);
         }
+        
         .assistant-message {
-            background-color: #ffffff;
+            background-color: white;
             margin-right: auto;
             border-bottom-left-radius: 0;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border-right: 3px solid var(--cmu-red);
         }
-        .message-time {
-            font-size: 0.7rem;
-            color: #999;
-            text-align: right;
-            margin-top: 0.5rem;
+        
+        /* Message image styling */
+        .message-image {
+            max-width: 100%;
+            border-radius: 0.5rem;
+            margin: 0.5rem 0;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
         }
-        .footer {
-            background-color: #ffffff;
-            padding: 1rem;
-            border-top: 1px solid #e0e0e0;
-        }
-        .input-group {
-            background-color: #ffffff;
-            border-radius: 2rem;
-            overflow: hidden;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        .form-control {
-            border: none;
-            padding: 0.75rem 1.5rem;
-        }
-        .form-control:focus {
-            box-shadow: none;
-        }
-        .btn-primary {
-            background-color: #1a237e;
-            border-color: #1a237e;
-            border-radius: 2rem;
-            padding: 0.75rem 1.5rem;
-        }
-        .btn-outline-secondary {
-            border-color: #e0e0e0;
-            color: #757575;
-        }
-        .btn-outline-secondary:hover {
-            background-color: #f5f5f5;
-            color: #424242;
-        }
-        .thinking {
-            display: flex;
-            align-items: center;
-            font-style: italic;
-            color: #757575;
-            margin-bottom: 1rem;
-        }
-        .thinking .dots {
-            display: flex;
-            margin-left: 0.5rem;
-        }
-        .thinking .dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background-color: #757575;
-            margin: 0 2px;
-            animation: dot-flashing 1s infinite alternate;
-        }
-        .thinking .dot:nth-child(2) {
-            animation-delay: 0.2s;
-        }
-        .thinking .dot:nth-child(3) {
-            animation-delay: 0.4s;
-        }
-        @keyframes dot-flashing {
-            0% {
-                opacity: 0.2;
-            }
-            100% {
-                opacity: 1;
-            }
-        }
-        .navbar-brand {
-            font-weight: bold;
-        }
-        .code-block {
-            background-color: #f8f9fa;
-            padding: 0.5rem;
-            border-radius: 0.25rem;
-            font-family: monospace;
-            white-space: pre-wrap;
-        }
-        .feedback-buttons {
-            display: flex;
-            justify-content: flex-end;
-            margin-top: 0.5rem;
-        }
-        .feedback-rating {
-            font-size: 1.5rem;
+        
+        /* Image upload styling */
+        .input-group-text[for="image-upload"] {
             cursor: pointer;
-            color: #ccc;
-            transition: color 0.2s;
+            transition: all 0.2s ease;
+            color: var(--cmu-gray);
         }
-        .feedback-rating:hover,
-        .feedback-rating.active {
-            color: #ffc107;
+        
+        .input-group-text[for="image-upload"]:hover {
+            background-color: #f1f1f1;
+            color: var(--cmu-red);
         }
-        .feedback-form {
-            margin-top: 1rem;
-            display: none;
+        
+        #image-preview-container {
+            background-color: rgba(255, 255, 255, 0.5);
+            border-radius: 8px;
+            padding: 5px;
+            display: inline-block;
         }
+        
+        #image-preview {
+            border: 2px solid var(--cmu-red);
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s ease;
+        }
+        
+        #image-preview:hover {
+            transform: scale(1.05);
+        }
+        
+        #remove-image {
+            opacity: 0.8;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+        
+        #remove-image:hover {
+            opacity: 1;
+            transform: scale(1.1);
+        }
+        
+        /* Only keep document-related styles and other unique components */
         /* Split View Layout */
         .split-container {
             display: flex;
@@ -289,6 +281,9 @@
                 <i class="bi bi-book me-2"></i>{{ course_id }}
             </span>
             <div class="ms-auto d-flex align-items-center">
+                <button id="uploadMaterialsBtn" class="btn btn-outline-light me-2" title="Upload course materials">
+                    <i class="bi bi-upload me-1"></i> Upload Materials
+                </button>
                 <button id="updateMaterialsBtn" class="btn btn-outline-light me-2" title="Update course materials">
                     <i class="bi bi-arrow-clockwise me-1"></i> Update Materials
                 </button>
@@ -306,7 +301,7 @@
         <div class="chat-side">
             <div class="chat-container">
                 <div class="messages-container" id="messages">
-                    <div class="assistant-message">
+                    <div class="message assistant-message">
                         <h5>Ellie</h5>
                         <p>Hello! I'm Ellie, your AI Teaching Assistant for {{ course_id }}. How can I help you today?</p>
                         <div class="message-time" id="current-time"></div>
@@ -323,11 +318,25 @@
                 <form id="question-form" class="mt-2">
                     <div class="input-group">
                         <input type="text" id="question" class="form-control" placeholder="Ask a question about {{ course_id }}..."
-                            required>
-                        <button class="btn btn-primary" type="submit">
-                            <i class="bi bi-send"></i>
+                            >
+                        <label class="input-group-text btn btn-outline-secondary border-start-0" for="image-upload" title="Upload an image">
+                            <i class="bi bi-image"></i>
+                        </label>
+                        <input type="file" class="d-none" id="image-upload" accept="image/*">
+                        <button class="btn btn-primary px-3" type="submit" title="Send message">
+                            <i class="bi bi-send-fill"></i>
                         </button>
                     </div>
+                    <div id="image-preview-container" class="mt-2 d-none">
+                        <div class="position-relative d-inline-block">
+                            <img id="image-preview" class="rounded" style="max-height: 100px; max-width: 200px;">
+                            <button type="button" class="btn-close position-absolute top-0 end-0 bg-white rounded-circle m-1" 
+                                id="remove-image" aria-label="Remove image"></button>
+                        </div>
+                    </div>
+                    <small class="text-muted ms-2">
+                        <i class="bi bi-info-circle-fill me-1"></i> You can upload an image and I can help analyze it
+                    </small>
                 </form>
             </div>
         </div>
@@ -565,6 +574,37 @@
         </div>
     </div>
 
+    <!-- Upload Course Materials Modal -->
+    <div class="modal fade" id="uploadMaterialsModal" tabindex="-1" aria-labelledby="uploadMaterialsModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="uploadMaterialsModalLabel">Upload Course Materials</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Upload materials for {{ course_id }} course.</p>
+                    <form id="uploadMaterialsForm">
+                        <div class="mb-3">
+                            <label for="materials" class="form-label">Select Files</label>
+                            <input type="file" class="form-control" id="materials" name="materials" multiple accept=".pdf,.pptx,.docx,.txt,.csv">
+                            <div class="form-text">Supported formats: PDF, PowerPoint, Word, Text, CSV (max 16MB each)</div>
+                        </div>
+                        <input type="hidden" name="course_id" value="{{ course_id }}">
+                    </form>
+                    <div class="alert alert-success d-none" id="uploadSuccess"></div>
+                    <div class="alert alert-danger d-none" id="uploadError"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="submitUploadBtn">
+                        <i class="bi bi-upload"></i> Upload
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="/static/js/main.js"></script>
@@ -583,6 +623,43 @@
         const downloadBtn = document.getElementById('downloadBtn');
         const toggleDocumentBtn = document.getElementById('toggleDocumentBtn');
         const closeDocumentBtn = document.getElementById('closeDocumentBtn');
+        
+        // Image upload elements
+        const imageUploadInput = document.getElementById('image-upload');
+        const imagePreviewContainer = document.getElementById('image-preview-container');
+        const imagePreview = document.getElementById('image-preview');
+        const removeImageBtn = document.getElementById('remove-image');
+        
+        // Variables to store the current image
+        let currentImageFile = null;
+        let currentImageDataUrl = null;
+        
+        // Handle image upload
+        imageUploadInput.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file && file.type.startsWith('image/')) {
+                console.log("Image selected:", file.name, file.type, file.size);
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    currentImageDataUrl = e.target.result;
+                    imagePreview.src = currentImageDataUrl;
+                    imagePreviewContainer.classList.remove('d-none');
+                    currentImageFile = file;
+                    console.log("Image loaded into preview, currentImageFile set");
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+        
+        // Handle image removal
+        removeImageBtn.addEventListener('click', function() {
+            console.log("Image removed");
+            imagePreviewContainer.classList.add('d-none');
+            imagePreview.src = '';
+            imageUploadInput.value = '';
+            currentImageFile = null;
+            currentImageDataUrl = null;
+        });
         
         // Current document state
         let currentDocument = {
@@ -795,36 +872,84 @@
             e.preventDefault();
             
             const question = questionInput.value.trim();
-            if (!question) return;
+            
+            // Make sure either text or image is present
+            if (!question && !currentImageFile) {
+                alert("Please enter a question or upload an image.");
+                return;
+            }
             
             // Add user message
             const userMessage = document.createElement('div');
             userMessage.className = 'message user-message';
-            userMessage.innerHTML = `
-                <h5>You</h5>
-                <p>${question}</p>
-                <div class="message-time">${formatTime()}</div>
-            `;
+            let userMessageContent = '';
+            
+            // Add question text if any
+            if (question) {
+                userMessageContent += `
+                    <h5>You</h5>
+                    <p>${question}</p>
+                `;
+            } else if (currentImageFile) {
+                userMessageContent += `
+                    <h5>You</h5>
+                    <p>[Image uploaded]</p>
+                `;
+            }
+            
+            // Add image if any
+            if (currentImageDataUrl) {
+                userMessageContent += `
+                    <div class="message-image-container">
+                        <img src="${currentImageDataUrl}" alt="Uploaded image" class="message-image">
+                    </div>
+                `;
+            }
+            
+            userMessageContent += `<div class="message-time">${formatTime()}</div>`;
+            userMessage.innerHTML = userMessageContent;
             messagesContainer.appendChild(userMessage);
             
-            // Clear input and scroll to bottom
+            // Clear input, image and scroll to bottom
             questionInput.value = '';
+            const imageWasUploaded = !!currentImageFile;
+            const imageCopy = currentImageFile; // Make a copy before removing
+            removeImageBtn.click();
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
             
             // Show thinking indicator
             thinkingIndicator.classList.remove('d-none');
             
             try {
+                // Prepare form data for submission
+                const formData = new FormData();
+                formData.append('course_id', '{{ course_id }}');
+                formData.append('question', question);
+                
+                // Choose endpoint based on whether an image was uploaded
+                let endpoint = '/api/ask';
+                let body = JSON.stringify({
+                    course_id: '{{ course_id }}',
+                    question: question
+                });
+                let headers = { 'Content-Type': 'application/json' };
+                
+                // If image was uploaded, use image endpoint with form data
+                if (imageWasUploaded && imageCopy) {
+                    endpoint = '/api/ask_with_image';
+                    formData.append('image', imageCopy);
+                    body = formData;
+                    headers = {}; // No Content-Type for multipart/form-data
+                    console.log("Using vision model API with image");
+                } else {
+                    console.log("Using text-only API without image");
+                }
+                
                 // Send question to API
-                const response = await fetch('/api/ask', {
+                const response = await fetch(endpoint, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        question: question,
-                        course_id: '{{ course_id }}'
-                    })
+                    body: body,
+                    headers: headers
                 });
                 
                 const data = await response.json();
@@ -877,6 +1002,8 @@
                 messagesContainer.scrollTop = messagesContainer.scrollHeight;
                 
             } catch (error) {
+                console.error("Error processing request:", error);
+                
                 // Hide thinking indicator
                 thinkingIndicator.classList.add('d-none');
                 
@@ -885,7 +1012,7 @@
                 errorMessage.className = 'message assistant-message';
                 errorMessage.innerHTML = `
                     <h5>Ellie</h5>
-                    <p>Sorry, there was an error processing your request.</p>
+                    <p>Sorry, there was an error processing your request: ${error.message}</p>
                     <div class="message-time">${formatTime()}</div>
                 `;
                 messagesContainer.appendChild(errorMessage);
@@ -894,8 +1021,8 @@
         });
         
         // Helper function to format time
-        function formatTime() {
-            const now = new Date();
+        function formatTime(timestamp = null) {
+            const now = timestamp ? new Date(timestamp) : new Date();
             return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         }
         
@@ -919,21 +1046,60 @@
                         messageDiv.className = msg.role === 'user' ? 'message user-message' : 'message assistant-message';
                         
                         if (msg.role === 'user') {
-                            messageDiv.innerHTML = `
-                                <h5>You</h5>
-                                <p>${msg.content}</p>
-                                <div class="message-time">${formatTime(new Date(msg.timestamp))}</div>
-                            `;
+                            let userMessageContent = `<h5>You</h5>`;
+                            
+                            // Add text content
+                            userMessageContent += `<p>${msg.content}</p>`;
+                            
+                            // Add image if present in references
+                            if (msg.references && msg.references.length > 0) {
+                                for (const ref of msg.references) {
+                                    if (ref.image_path) {
+                                        userMessageContent += `
+                                            <div class="message-image-container">
+                                                <img src="/${ref.image_path}" alt="Uploaded image" class="message-image">
+                                            </div>
+                                        `;
+                                    }
+                                }
+                            }
+                            
+                            userMessageContent += `<div class="message-time">${formatTime(new Date(msg.timestamp * 1000))}</div>`;
+                            messageDiv.innerHTML = userMessageContent;
                         } else {
                             messageDiv.innerHTML = `
                                 <h5>Ellie</h5>
                                 <div>${processMarkdown(msg.content)}</div>
-                                <div class="message-time">${formatTime(new Date(msg.timestamp))}</div>
+                                <div class="message-time">${formatTime(new Date(msg.timestamp * 1000))}</div>
                             `;
                             
                             // Add references if available
                             if (msg.references && msg.references.length > 0) {
-                                messageDiv.dataset.references = JSON.stringify(msg.references);
+                                // Filter for document references (not image references)
+                                const docRefs = msg.references.filter(ref => ref.doc_id && ref.doc_id !== "unknown");
+                                
+                                if (docRefs.length > 0) {
+                                    const formattedRefs = docRefs.map((ref, i) => {
+                                        const refText = `[ref${i+1}]`;
+                                        let page_or_slide = null;
+                                        if ('page' in ref) {
+                                            page_or_slide = ref.page;
+                                        } else if ('slide' in ref) {
+                                            page_or_slide = ref.slide;
+                                        }
+                                        
+                                        return {
+                                            id: refText,
+                                            doc_id: ref.doc_id,
+                                            source: ref.source ? ref.source.split('/').pop() : "",
+                                            page_or_slide: page_or_slide,
+                                            title: ref.title || "",
+                                            subtitle: ref.page_title || ref.slide_title || ""
+                                        };
+                                    });
+                                    
+                                    messageDiv.dataset.references = JSON.stringify(formattedRefs);
+                                }
                             }
                         }
                         
@@ -961,6 +1127,92 @@
                 }
             })
             .catch(error => console.error('Error loading history:', error));
+        
+        // Theme toggle functionality
+        document.getElementById('themeToggleBtn')?.addEventListener('click', function() {
+            document.body.classList.toggle('dark-theme');
+            localStorage.setItem('theme', document.body.classList.contains('dark-theme') ? 'dark' : 'light');
+        });
+        
+        // Apply saved theme
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'dark') {
+            document.body.classList.add('dark-theme');
+        }
+        
+        // Upload Materials Functionality
+        const uploadMaterialsBtn = document.getElementById('uploadMaterialsBtn');
+        const uploadMaterialsModal = new bootstrap.Modal(document.getElementById('uploadMaterialsModal'));
+        const uploadMaterialsForm = document.getElementById('uploadMaterialsForm');
+        const submitUploadBtn = document.getElementById('submitUploadBtn');
+        const uploadSuccess = document.getElementById('uploadSuccess');
+        const uploadError = document.getElementById('uploadError');
+        
+        // Show upload materials modal
+        uploadMaterialsBtn.addEventListener('click', function() {
+            // Reset form and alerts
+            uploadMaterialsForm.reset();
+            uploadSuccess.classList.add('d-none');
+            uploadError.classList.add('d-none');
+            uploadMaterialsModal.show();
+        });
+        
+        // Handle material upload
+        submitUploadBtn.addEventListener('click', function() {
+            const files = document.getElementById('materials').files;
+            if (!files.length) {
+                uploadError.textContent = 'Please select files to upload.';
+                uploadError.classList.remove('d-none');
+                uploadSuccess.classList.add('d-none');
+                return;
+            }
+            
+            // Show loading state
+            const originalBtnText = submitUploadBtn.innerHTML;
+            submitUploadBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Uploading...';
+            submitUploadBtn.disabled = true;
+            
+            // Prepare form data
+            const formData = new FormData(uploadMaterialsForm);
+            
+            // Upload the files
+            fetch('/api/upload_materials', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Reset button
+                submitUploadBtn.innerHTML = originalBtnText;
+                submitUploadBtn.disabled = false;
+                
+                if (data.success) {
+                    uploadSuccess.textContent = data.message;
+                    uploadSuccess.classList.remove('d-none');
+                    uploadError.classList.add('d-none');
+                    
+                    // Close modal after 2 seconds
+                    setTimeout(() => {
+                        uploadMaterialsModal.hide();
+                    }, 2000);
+                } else {
+                    uploadError.textContent = data.error || 'Upload failed. Please try again.';
+                    uploadError.classList.remove('d-none');
+                    uploadSuccess.classList.add('d-none');
+                }
+            })
+            .catch(error => {
+                // Reset button
+                submitUploadBtn.innerHTML = originalBtnText;
+                submitUploadBtn.disabled = false;
+                
+                // Show error
+                uploadError.textContent = 'An error occurred during upload. Please try again.';
+                uploadError.classList.remove('d-none');
+                uploadSuccess.classList.add('d-none');
+                console.error('Upload error:', error);
+            });
+        });
     </script>
 </body>
 </html> 

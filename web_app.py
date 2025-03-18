@@ -10,11 +10,14 @@ import fitz  # PyMuPDF
 from pptx import Presentation
 from PIL import Image
 import base64
+import requests
+import numpy as np
 from course_rag import CourseRAG
 from course_prompts import CoursePromptManager
 from conversation_manager import ConversationManager
 from feedback_system import FeedbackSystem
 from dotenv import load_dotenv
+from werkzeug.utils import secure_filename
 
 # Load environment variables
 load_dotenv()
@@ -39,13 +42,23 @@ feedback_system = FeedbackSystem()
 
 # Directory setup
 MATERIALS_DIR = os.getenv("MATERIALS_DIR", "course_materials")
+UPLOAD_FOLDER = os.path.join("static", "uploads")
 os.makedirs(MATERIALS_DIR, exist_ok=True)
 os.makedirs("templates", exist_ok=True)
 os.makedirs("static", exist_ok=True)
 os.makedirs("static/css", exist_ok=True)
 os.makedirs("static/js", exist_ok=True)
 os.makedirs("static/images", exist_ok=True)
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+# Configure app
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload size
+
+# Get API keys from environment variables
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama3-70b-8192")
+GROQ_VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "llama-3.2-90b-vision-preview")
 
 def get_rag_instance(course_id, discipline=None):
     """Get or create a RAG instance for the given course"""
@@ -103,6 +116,23 @@ def get_courses():
     return jsonify({'courses': courses})
 
 
+# Helper function to make data JSON serializable
+def make_json_serializable(obj):
+    """Convert NumPy types and other non-serializable types to Python native types"""
+    if isinstance(obj, np.float32) or isinstance(obj, np.float64):
+        return float(obj)
+    elif isinstance(obj, np.int32) or isinstance(obj, np.int64):
+        return int(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {k: make_json_serializable(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [make_json_serializable(item) for item in obj]
+    else:
+        return obj
+
+
 @app.route('/api/ask', methods=['POST'])
 def ask_question():
     """API endpoint to answer a question"""
@@ -120,6 +150,9 @@ def ask_question():
     try:
         # Get answer from RAG system
         answer, references = rag.answer_question(question, user_id)
+        
+        # Convert references to JSON serializable format
+        references = make_json_serializable(references)
         
         # Format the references for the UI
         formatted_refs = []
@@ -143,6 +176,10 @@ def ask_question():
                 "title": ref.get("title", ""),
                 "subtitle": ref.get("page_title", ref.get("slide_title", ""))
             })
+        
+        # Save the conversation with references
+        conversation_manager.add_message(course_id, user_id, "user", question)
+        conversation_manager.add_message(course_id, user_id, "assistant", answer, references=references)
         
         return jsonify({
             "answer": answer, 
@@ -268,6 +305,58 @@ def update_materials():
         rag = get_rag_instance(course_id)
         rag.update_materials()
         return jsonify({'success': True, 'message': 'Materials updated successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/upload_materials', methods=['POST'])
+def upload_materials():
+    """API endpoint to upload course materials"""
+    # Check if course_id is provided
+    course_id = request.form.get('course_id')
+    if not course_id:
+        return jsonify({'error': 'Course ID is required'}), 400
+    
+    # Check if course directory exists
+    course_dir = os.path.join(MATERIALS_DIR, course_id)
+    if not os.path.exists(course_dir):
+        return jsonify({'error': f'Course {course_id} not found'}), 404
+    
+    # Check if files were uploaded
+    if 'materials' not in request.files:
+        return jsonify({'error': 'No files uploaded'}), 400
+    
+    files = request.files.getlist('materials')
+    if not files or files[0].filename == '':
+        return jsonify({'error': 'No files selected'}), 400
+    
+    # Define allowed file extensions
+    ALLOWED_EXTENSIONS = {'pdf', 'pptx', 'docx', 'txt', 'csv'}
+    
+    # Process uploaded files
+    uploaded_files = []
+    for file in files:
+        if file and '.' in file.filename:
+            ext = file.filename.rsplit('.', 1)[1].lower()
+            if ext in ALLOWED_EXTENSIONS:
+                filename = secure_filename(file.filename)
+                file_path = os.path.join(course_dir, filename)
+                file.save(file_path)
+                uploaded_files.append(filename)
+    
+    if not uploaded_files:
+        return jsonify({'error': 'No valid files were uploaded'}), 400
+    
+    try:
+        # Update materials in the RAG system
+        rag = get_rag_instance(course_id)
+        rag.update_materials()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Successfully uploaded {len(uploaded_files)} file(s) to {course_id}',
+            'files': uploaded_files
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -520,6 +609,171 @@ def download_document(course_id, doc_id):
     except Exception as e:
         return jsonify({"error": f"Error downloading document: {str(e)}"}), 500
 
+@app.route('/api/ask_with_image', methods=['POST'])
+def ask_question_with_image():
+    """API endpoint to answer a question that may include an image"""
+    if not request.form.get('course_id'):
+        return jsonify({"error": "Missing course_id parameter"}), 400
+    
+    course_id = request.form.get('course_id')
+    question = request.form.get('question', '')
+    user_id = get_user_id()
+    
+    print(f"Received image upload request for course {course_id}")
+    print(f"Files in request: {request.files.keys()}")
+    
+    # Check if an image was uploaded
+    image_file = None
+    image_path = None
+    if 'image' in request.files and request.files['image'].filename:
+        image_file = request.files['image']
+        print(f"Image file detected: {image_file.filename}, {image_file.content_type}")
+        if image_file and allowed_file(image_file.filename):
+            filename = secure_filename(f"{user_id}_{int(time.time())}_{image_file.filename}")
+            image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            image_file.save(image_path)
+            print(f"Image saved to: {image_path}")
+        else:
+            print(f"Invalid image file or not allowed: {image_file.filename}")
+    else:
+        print("No image file found in request")
+    
+    try:
+        # Get RAG instance for context
+        rag = get_rag_instance(course_id)
+        
+        # If there's an image, use the vision model with the image
+        if image_path:
+            print(f"Using vision model with image: {image_path}")
+            # First, get relevant context from the RAG system based on the text question
+            rag_context = ""
+            if question.strip():
+                rag_context, _ = rag.get_context(question, user_id)
+            
+            # Prepare prompt with course context
+            system_prompt = f"You are Ellie, an AI Teaching Assistant for course {course_id}. Answer the student's question based on the image they've shared and your knowledge of the course material."
+            
+            if rag_context:
+                system_prompt += f"\n\nHere is relevant information from the course materials that may help you answer:\n{rag_context}"
+            
+            # Call the vision model with the image
+            print(f"Calling vision model {GROQ_VISION_MODEL}")
+            answer = call_vision_model(system_prompt, question, image_path)
+            print("Vision model response received")
+            
+            # Save the conversation with the image path
+            conversation_manager.add_message(
+                course_id, 
+                user_id,
+                "user", 
+                question if question else "[Image uploaded without text]",
+                references=[{"image_path": image_path}]
+            )
+            conversation_manager.add_message(course_id, user_id, "assistant", answer)
+            
+            return jsonify({
+                "answer": answer,
+                "references": []  # No direct references for image-based queries yet
+            })
+        else:
+            print("No image path, falling back to text-only response")
+            # If no image, use the regular RAG-based approach
+            answer, references = rag.answer_question(question, user_id)
+            
+            # Convert references to JSON serializable format
+            references = make_json_serializable(references)
+            
+            # Format the references for the UI
+            formatted_refs = []
+            for i, ref in enumerate(references):
+                # Skip references with invalid doc_id
+                if not ref.get("doc_id") or ref.get("doc_id") == "unknown":
+                    continue
+                    
+                ref_text = f"[ref{i+1}]"
+                page_or_slide = None
+                if 'page' in ref:
+                    page_or_slide = ref['page']
+                elif 'slide' in ref:
+                    page_or_slide = ref['slide']
+                    
+                formatted_refs.append({
+                    "id": ref_text,
+                    "doc_id": ref.get("doc_id", ""),
+                    "source": os.path.basename(ref.get("source", "")),
+                    "page_or_slide": page_or_slide,
+                    "title": ref.get("title", ""),
+                    "subtitle": ref.get("page_title", ref.get("slide_title", ""))
+                })
+            
+            return jsonify({
+                "answer": answer,
+                "references": formatted_refs
+            })
+            
+    except Exception as e:
+        print(f"Error in ask_question_with_image: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+def allowed_file(filename):
+    """Check if the uploaded file has an allowed extension"""
+    ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def call_vision_model(system_prompt, user_question, image_path):
+    """Call the GROQ Vision model API with the image and question"""
+    if not GROQ_API_KEY:
+        raise ValueError("GROQ_API_KEY is not set in environment variables")
+    
+    print(f"Processing image: {image_path}")
+    
+    # Get image data as base64
+    with open(image_path, "rb") as image_file:
+        image_data = base64.b64encode(image_file.read()).decode('utf-8')
+    
+    print(f"Image encoded as base64 (length: {len(image_data)})")
+    
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    # Combine system prompt with user question since system messages are incompatible with image inputs
+    combined_prompt = f"{system_prompt}\n\nQuestion: {user_question if user_question else 'Can you analyze and explain this image?'}"
+    
+    payload = {
+        "model": GROQ_VISION_MODEL,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": combined_prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}}
+                ]
+            }
+        ],
+        "temperature": 0.2
+    }
+    
+    print(f"Sending request to Groq Vision API with model: {GROQ_VISION_MODEL}")
+    
+    response = requests.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers=headers,
+        json=payload
+    )
+    
+    if response.status_code != 200:
+        error_msg = f"Error calling GROQ Vision API (status {response.status_code}): {response.text}"
+        print(error_msg)
+        raise Exception(error_msg)
+    
+    result = response.json()
+    print("Vision API response received successfully")
+    
+    return result['choices'][0]['message']['content']
 
 if __name__ == '__main__':
     # Create HTML templates and static files

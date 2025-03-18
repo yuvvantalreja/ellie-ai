@@ -1,10 +1,12 @@
 # Environment variables
 .env
+README.md
 
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
+.pytest_cache/
 *.so
 .Python
 env/
@@ -22,10 +24,22 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
-venv/
 
-# Vector stores
+# Virtual Environment
+venv/
+ENV/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Project specific
 vectorstores/
+course_materials/
+static/uploads/
+*.pkl
 
 # Logs
 *.log

@@ -71,6 +71,24 @@
                                 <input type="text" class="form-control" id="courseId" required placeholder="Enter CMU course ID">
                                 <div class="form-text">This will create a folder where you can add course materials.</div>
                             </div>
+                            <div class="mb-3">
+                                <label for="discipline" class="form-label">Discipline (Optional)</label>
+                                <select class="form-select" id="discipline">
+                                    <option value="">Select discipline (optional)</option>
+                                    <option value="computer_science">Computer Science</option>
+                                    <option value="mathematics">Mathematics</option>
+                                    <option value="engineering">Engineering</option>
+                                    <option value="business">Business</option>
+                                    <option value="humanities">Humanities</option>
+                                    <option value="sciences">Sciences</option>
+                                </select>
+                                <div class="form-text">Selecting a discipline helps Ellie understand your course better.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="courseMaterials" class="form-label">Upload Course Materials (Optional)</label>
+                                <input type="file" class="form-control" id="courseMaterials" multiple accept=".pdf,.pptx,.docx,.txt">
+                                <div class="form-text">You can upload PDF, PowerPoint, Word, and text files (max 16MB each).</div>
+                            </div>
                             <button type="submit" class="btn btn-primary">
                                 <i class="bi bi-plus-lg me-1"></i> Create Course
                             </button>
@@ -126,33 +144,76 @@
             e.preventDefault();
             
             const courseId = document.getElementById('courseId').value.trim();
+            const discipline = document.getElementById('discipline').value;
+            const courseFiles = document.getElementById('courseMaterials').files;
             
             if (!courseId) {
                 customError('Please enter a valid Course ID');
                 return;
             }
             
+            // Show loading indicator
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalBtnText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Creating...';
+            submitBtn.disabled = true;
+            
+            // First create the course
             fetch('/api/create_course', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ course_id: courseId }),
+                body: JSON.stringify({ 
+                    course_id: courseId,
+                    discipline: discipline 
+                }),
             })
             .then(response => response.json())
             .then(data => {
+                if (data.success) {
+                    // If there are files to upload, upload them
+                    if (courseFiles.length > 0) {
+                        const formData = new FormData();
+                        formData.append('course_id', courseId);
+                        
+                        // Append all files
+                        for (let i = 0; i < courseFiles.length; i++) {
+                            formData.append('materials', courseFiles[i]);
+                        }
+                        
+                        // Upload the files
+                        return fetch('/api/upload_materials', {
+                            method: 'POST',
+                            body: formData
+                        }).then(response => response.json());
+                    }
+                    return data;
+                } else {
+                    throw new Error(data.error || 'Failed to create course');
+                }
+            })
+            .then(data => {
+                // Reset the button
+                submitBtn.innerHTML = originalBtnText;
+                submitBtn.disabled = false;
+                
                 if (data.success) {
                     customSuccess(data.message);
                     setTimeout(() => {
                         location.reload();
                     }, 1500);
                 } else {
-                    customError('Error: ' + data.error);
+                    customError('Error: ' + (data.error || 'Unknown error'));
                 }
             })
             .catch(error => {
+                // Reset the button
+                submitBtn.innerHTML = originalBtnText;
+                submitBtn.disabled = false;
+                
                 console.error('Error:', error);
-                customError('An error occurred. Please try again.');
+                customError('An error occurred: ' + error.message);
             });
         });
     </script>

@@ -17,12 +17,28 @@ A powerful, customizable RAG (Retrieval-Augmented Generation) system designed to
 - Groq API key (sign up at [groq.com](https://groq.com))
 - Course materials in digital form (PDFs, DOCXs, etc.)
 
-## Installation
+## Quick Installation
 
-1. Clone this repository:
+### Option 1: Using the setup script (Recommended)
+
+1. Run the setup script:
    ```bash
-   git clone <your-repo-url>
-   cd ai-teaching-assistant
+   chmod +x setup.sh
+   ./setup.sh
+   ```
+
+2. Start the web application:
+   ```bash
+   source venv/bin/activate
+   python web_app.py
+   ```
+
+### Option 2: Manual installation
+
+1. Create a virtual environment (optional but recommended):
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
    ```
 
 2. Install dependencies:
@@ -30,11 +46,29 @@ A powerful, customizable RAG (Retrieval-Augmented Generation) system designed to
    pip install -r requirements.txt
    ```
 
-3. Configure your Groq API key:
-   Edit the `.env` file and add your Groq API key:
+3. Run the setup script:
+   ```bash
+   python setup.py
    ```
-   GROQ_API_KEY=your_api_key_here
+
+4. Start the web application:
+   ```bash
+   python web_app.py
    ```
+
+## Environment Setup
+
+1. Copy the example environment file:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Edit the `.env` file and add your Groq API key:
+   ```
+   GROQ_API_KEY=your_actual_api_key_here
+   ```
+
+Note: The `.env` file contains sensitive information and is excluded from version control.
 
 ## Setting Up Course Materials
 

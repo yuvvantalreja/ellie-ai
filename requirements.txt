@@ -15,4 +15,6 @@ gunicorn
 pandas
 matplotlib
 pyyaml
-werkzeug 
+werkzeug
+pyrebase4
+firebase-admin 

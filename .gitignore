@@ -49,4 +49,17 @@ static/uploads/
 
 # IDE specific files
 .idea/
-.vscode/ 
+.vscode/
+
+# Firebase credentials
+firebase-key.json
+*firebase*key*.json
+firebase_config.py
+
+# User data
+user_data/
+conversation_history/
+users.py
+
+# Auth related
+create_test_user.py 

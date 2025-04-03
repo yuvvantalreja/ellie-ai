@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, send_file, session, Response
+from flask import Flask, render_template, request, jsonify, send_file, session, Response, redirect, url_for, abort
 import os
 import threading
 import time
@@ -16,6 +16,8 @@ from course_rag import CourseRAG
 from course_prompts import CoursePromptManager
 from conversation_manager import ConversationManager
 from feedback_system import FeedbackSystem
+from users import UserManager
+from firebase_config import initialize_firebase, get_firebase_error_message, login_required, role_required
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 
@@ -39,6 +41,10 @@ rag_locks = {}  # Locks to prevent concurrent access to RAG instances
 prompt_manager = CoursePromptManager()
 conversation_manager = ConversationManager()
 feedback_system = FeedbackSystem()
+user_manager = UserManager()
+
+# Initialize Firebase
+firebase_initialized = initialize_firebase()
 
 # Directory setup
 MATERIALS_DIR = os.getenv("MATERIALS_DIR", "course_materials")
@@ -73,23 +79,65 @@ def get_rag_instance(course_id, discipline=None):
 
 
 def get_user_id():
-    """Get or create a unique user ID for the session"""
-    if 'user_id' not in session:
-        session['user_id'] = str(uuid.uuid4())
-    return session['user_id']
+    """Get the user ID from the session
+    
+    If the user is authenticated, return their actual user ID.
+    Otherwise, create a temporary anonymous ID for the session.
+    """
+    if 'user_id' in session:
+        # Return authenticated user ID
+        return session['user_id']
+    else:
+        # Create anonymous user ID for the session
+        if 'anonymous_id' not in session:
+            session['anonymous_id'] = str(uuid.uuid4())
+        return session['anonymous_id']
 
 
 @app.route('/')
 def index():
     """Render the main page"""
-    courses = []
+    # Check if user is logged in
+    user_data = None
+    is_authenticated = 'user_id' in session
     
-    # Get list of course directories
-    if os.path.exists(MATERIALS_DIR):
-        courses = [d for d in os.listdir(MATERIALS_DIR) 
-                 if os.path.isdir(os.path.join(MATERIALS_DIR, d))]
+    print(f"Session data in index route: {session}")
+    print(f"Is authenticated: {is_authenticated}")
     
-    return render_template('index.html', courses=courses)
+    if is_authenticated:
+        user_data = user_manager.get_user(session['user_id'])
+        print(f"User data: {user_data}")
+        courses = []
+        
+        # Get list of course directories
+        if os.path.exists(MATERIALS_DIR):
+            courses = [d for d in os.listdir(MATERIALS_DIR) 
+                     if os.path.isdir(os.path.join(MATERIALS_DIR, d))]
+        
+        # If professor, show all courses
+        # If student, filter courses they have access to
+        if user_data and user_data.get('role') == 'student':
+            user_courses = user_data.get('courses', [])
+            if user_courses:
+                courses = [c for c in courses if c in user_courses]
+        
+        return render_template('index.html', 
+                              courses=courses, 
+                              user=user_data, 
+                              is_authenticated=is_authenticated)
+    else:
+        # Redirect unauthenticated users to landing page
+        return render_template('landing.html')
+
+
+@app.route('/landing')
+def landing():
+    """Render the landing page for unauthenticated users"""
+    # If user is already logged in, redirect to index
+    if 'user_id' in session:
+        return redirect(url_for('index'))
+    
+    return render_template('landing.html')
 
 
 @app.route('/course/<course_id>')
@@ -98,10 +146,457 @@ def course_page(course_id):
     # Ensure user ID is set
     user_id = get_user_id()
     
+    # If authenticated user, check if they have access to this course
+    if 'user_id' in session:
+        user_data = user_manager.get_user(session['user_id'])
+        if user_data and user_data.get('role') == 'student':
+            user_courses = user_data.get('courses', [])
+            if course_id not in user_courses:
+                # Add course to user's courses
+                user_manager.add_course_to_user(session['user_id'], course_id)
+    
     # Get conversation history
     history = conversation_manager.get_conversation_history(course_id, user_id)
     
-    return render_template('chat.html', course_id=course_id, history=history)
+    # Get user data if authenticated
+    user_data = None
+    if 'user_id' in session:
+        user_data = user_manager.get_user(session['user_id'])
+    
+    return render_template('chat.html', 
+                          course_id=course_id, 
+                          history=history,
+                          user=user_data,
+                          is_authenticated='user_id' in session)
+
+
+# Authentication Routes
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Handle user login"""
+    if 'user_id' in session:
+        return redirect(url_for('index'))
+    
+    error = None
+    
+    if request.method == 'POST':
+        print("Login form submitted")
+        email = request.form.get('email')
+        password = request.form.get('password')
+        
+        print(f"Email: {email}")
+        print(f"Password length: {len(password) if password else 0}")
+        
+        if not email or not password:
+            error = 'Email and password are required'
+        else:
+            try:
+                from firebase_config import auth
+                
+                # Check if Firebase is initialized
+                if not firebase_initialized:
+                    error = 'Authentication service is not available. Please try again later.'
+                    print("Firebase not initialized during login attempt")
+                    return render_template('login.html', error=error)
+                
+                print("Attempting to authenticate with Firebase")
+                # Authenticate with Firebase
+                user = auth.sign_in_with_email_and_password(email, password)
+                print(f"Firebase authentication successful: {user['localId']}")
+                
+                # Get user data from our database
+                user_data = user_manager.get_user_by_email(email)
+                print(f"User data from database: {user_data}")
+                
+                if not user_data:
+                    error = 'User not found. Please register first.'
+                    print("User not found in database")
+                else:
+                    # Set session data
+                    session['user_id'] = user_data['id']
+                    session['user_email'] = user_data['email']
+                    session['user_name'] = user_data['name']
+                    session['user_role'] = user_data['role']
+                    
+                    print(f"Session data set: {session}")
+                    
+                    # Update last login
+                    user_manager.update_last_login(user_data['id'])
+                    
+                    # Redirect to home page
+                    next_url = request.args.get('next', url_for('index'))
+                    print(f"Redirecting to: {next_url}")
+                    return redirect(next_url)
+                    
+            except Exception as e:
+                print(f"Login error: {str(e)}")
+                error = f'Authentication failed: {str(e)}'
+    
+    return render_template('login.html', error=error)
+
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    """Handle user registration"""
+    if 'user_id' in session:
+        return redirect(url_for('index'))
+    
+    error = None
+    
+    if request.method == 'POST':
+        print("Register form submitted")
+        name = request.form.get('name')
+        email = request.form.get('email')
+        password = request.form.get('password')
+        role = request.form.get('role')
+        
+        print(f"Name: {name}")
+        print(f"Email: {email}")
+        print(f"Password length: {len(password) if password else 0}")
+        print(f"Role: {role}")
+        
+        if not all([name, email, password, role]):
+            error = 'All fields are required'
+        elif len(password) < 6:
+            error = 'Password must be at least 6 characters long'
+        else:
+            try:
+                from firebase_config import auth
+                
+                # Check if Firebase is initialized
+                if not firebase_initialized:
+                    error = 'Authentication service is not available. Please try again later.'
+                    print("Firebase not initialized during registration attempt")
+                    return render_template('register.html', error=error)
+                
+                print("Attempting to create user in Firebase")
+                # Create user in Firebase
+                firebase_user = auth.create_user_with_email_and_password(email, password)
+                print(f"Firebase user created: {firebase_user['localId']}")
+                
+                # Create user in our database
+                user_data = user_manager.create_user(
+                    email=email,
+                    name=name,
+                    role=role,
+                    provider='email',
+                    provider_id=firebase_user['localId']
+                )
+                print(f"User created in database: {user_data}")
+                
+                # Set session data
+                session['user_id'] = user_data['id']
+                session['user_email'] = user_data['email']
+                session['user_name'] = user_data['name']
+                session['user_role'] = user_data['role']
+                
+                print(f"Session data set: {session}")
+                
+                # Redirect to home page
+                print("Redirecting to home page")
+                return redirect(url_for('index'))
+                
+            except Exception as e:
+                error_code = None
+                if hasattr(e, 'args') and len(e.args) > 0 and isinstance(e.args[0], dict) and 'error' in e.args[0]:
+                    error_code = e.args[0]['error']['message']
+                    error = get_firebase_error_message(error_code)
+                else:
+                    error = f'Registration failed: {str(e)}'
+                
+                print(f"Registration error: {str(e)}, code: {error_code}")
+    
+    return render_template('register.html', error=error)
+
+
+@app.route('/logout')
+def logout():
+    """Handle user logout"""
+    session.pop('user_id', None)
+    session.pop('user_email', None)
+    session.pop('user_name', None)
+    session.pop('user_role', None)
+    
+    return redirect(url_for('index'))
+
+
+@app.route('/select_role', methods=['GET', 'POST'])
+def select_role():
+    """Handle role selection for Google auth users"""
+    # This route is only for users who signed in with Google
+    if 'temp_user_id' not in session:
+        return redirect(url_for('login'))
+    
+    if request.method == 'POST':
+        selected_role = request.form.get('selected_role')
+        
+        if selected_role not in ['student', 'professor']:
+            return render_template('select_role.html', 
+                                  name=session.get('temp_user_name'),
+                                  error='Please select a valid role')
+        
+        # Update user role in the database
+        user_manager.update_user_role(session['temp_user_id'], selected_role)
+        
+        # Set permanent session data
+        session['user_id'] = session['temp_user_id']
+        session['user_email'] = session['temp_user_email']
+        session['user_name'] = session['temp_user_name']
+        session['user_role'] = selected_role
+        
+        # Clear temporary data
+        session.pop('temp_user_id', None)
+        session.pop('temp_user_email', None)
+        session.pop('temp_user_name', None)
+        
+        # Redirect to home page
+        return redirect(url_for('index'))
+    
+    return render_template('select_role.html', name=session.get('temp_user_name'))
+
+
+# API Routes for Authentication
+@app.route('/api/firebase_config', methods=['GET'])
+def get_firebase_config():
+    """Return Firebase configuration for client-side initialization"""
+    from firebase_config import firebase_config
+    
+    # Only return the essential config that the client needs
+    client_config = {
+        'apiKey': firebase_config.get('apiKey'),
+        'authDomain': firebase_config.get('authDomain'),
+        'projectId': firebase_config.get('projectId'),
+        'storageBucket': firebase_config.get('storageBucket'),
+        'messagingSenderId': firebase_config.get('messagingSenderId'),
+        'appId': firebase_config.get('appId')
+    }
+    
+    return jsonify({'success': True, 'config': client_config})
+
+
+@app.route('/api/auth/google_login', methods=['POST'])
+def google_login():
+    """Handle Google login API request"""
+    print("Google login API endpoint called")
+    token = request.json.get('token')
+    
+    if not token:
+        print("Error: Token is required")
+        return jsonify({'success': False, 'error': 'Token is required'})
+    
+    try:
+        # Check if Firebase Admin SDK is initialized with service account
+        from firebase_config import firebase_admin_app, FIREBASE_SERVICE_ACCOUNT
+        if not os.path.exists(FIREBASE_SERVICE_ACCOUNT):
+            print(f"Error: Service account file '{FIREBASE_SERVICE_ACCOUNT}' not found")
+            return jsonify({
+                'success': False, 
+                'error': f"Firebase service account file not found. Please create '{FIREBASE_SERVICE_ACCOUNT}' file.",
+                'setupRequired': True
+            })
+        
+        if not firebase_admin_app:
+            print("Error: Firebase Admin SDK not initialized")
+            return jsonify({
+                'success': False, 
+                'error': 'Firebase Admin SDK not initialized properly',
+                'setupRequired': True
+            })
+        
+        # Verify the ID token with Firebase
+        from firebase_config import auth
+        print(f"Firebase auth object: {auth}")
+        
+        print("Verifying ID token with Firebase")
+        try:
+            decoded_token = auth.verify_id_token(token)
+            print(f"Decoded token: {decoded_token}")
+        except Exception as token_error:
+            print(f"Token verification error: {str(token_error)}")
+            return jsonify({'success': False, 'error': f'Token verification failed: {str(token_error)}'})
+        
+        # Get user info
+        uid = decoded_token['uid']
+        email = decoded_token.get('email', '')
+        name = decoded_token.get('name', '')
+        if not name:
+            name = email.split('@')[0]
+        
+        print(f"User info from token - UID: {uid}, Email: {email}, Name: {name}")
+        
+        # Check if user exists in our database
+        user_data = user_manager.get_user_by_email(email)
+        print(f"User data from database: {user_data}")
+        
+        if user_data:
+            # User exists, set session data
+            session['user_id'] = user_data['id']
+            session['user_email'] = user_data['email']
+            session['user_name'] = user_data['name']
+            session['user_role'] = user_data['role']
+            
+            print(f"Session data set: {session}")
+            
+            # Update last login
+            user_manager.update_last_login(user_data['id'])
+            
+            print("Redirecting to index page")
+            return jsonify({'success': True, 'redirect': url_for('index')})
+        else:
+            # User doesn't exist, need to complete registration
+            print("User doesn't exist, redirecting to complete registration")
+            return jsonify({
+                'success': True,
+                'redirect': url_for('google_complete_registration', token=token)
+            })
+        
+    except Exception as e:
+        print(f"Google login error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'Authentication failed: {str(e)}'})
+
+
+@app.route('/auth/google/complete', methods=['GET'])
+def google_complete_registration():
+    """Complete registration for Google users"""
+    print("Google complete registration route called")
+    token = request.args.get('token')
+    
+    if not token:
+        print("No token provided")
+        return redirect(url_for('login'))
+    
+    try:
+        # Verify the ID token with Firebase
+        from firebase_config import auth
+        print("Verifying ID token with Firebase")
+        decoded_token = auth.verify_id_token(token)
+        print(f"Decoded token: {decoded_token}")
+        
+        # Get user info
+        uid = decoded_token['uid']
+        email = decoded_token.get('email', '')
+        name = decoded_token.get('name', '')
+        if not name:
+            name = email.split('@')[0]
+        
+        print(f"User info - UID: {uid}, Email: {email}, Name: {name}")
+        
+        # Set temporary session data
+        session['temp_user_id'] = str(uuid.uuid4())
+        session['temp_user_email'] = email
+        session['temp_user_name'] = name
+        
+        print(f"Temporary session data set: {session}")
+        
+        # Redirect to role selection
+        print("Redirecting to role selection")
+        return redirect(url_for('select_role'))
+        
+    except Exception as e:
+        print(f"Google complete registration error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return redirect(url_for('login'))
+
+
+@app.route('/api/auth/google_register', methods=['POST'])
+def google_register():
+    """Handle Google registration API request"""
+    token = request.json.get('token')
+    
+    if not token:
+        return jsonify({'success': False, 'error': 'Token is required'})
+    
+    try:
+        # Check if Firebase Admin SDK is initialized with service account
+        from firebase_config import firebase_admin_app, FIREBASE_SERVICE_ACCOUNT
+        if not os.path.exists(FIREBASE_SERVICE_ACCOUNT):
+            print(f"Error: Service account file '{FIREBASE_SERVICE_ACCOUNT}' not found")
+            return jsonify({
+                'success': False, 
+                'error': f"Firebase service account file not found. Please create '{FIREBASE_SERVICE_ACCOUNT}' file.",
+                'setupRequired': True
+            })
+        
+        if not firebase_admin_app:
+            print("Error: Firebase Admin SDK not initialized")
+            return jsonify({
+                'success': False, 
+                'error': 'Firebase Admin SDK not initialized properly',
+                'setupRequired': True
+            })
+            
+        # Verify the ID token with Firebase
+        from firebase_config import auth
+        print(f"Google register: Verifying token with Firebase auth")
+        
+        if auth is None:
+            print("Google register error: auth object is None")
+            return jsonify({'success': False, 'error': 'Firebase authentication not initialized'})
+            
+        try:
+            decoded_token = auth.verify_id_token(token)
+            print(f"Decoded token: {decoded_token}")
+        except Exception as token_error:
+            print(f"Token verification error: {str(token_error)}")
+            return jsonify({'success': False, 'error': f'Token verification failed: {str(token_error)}'})
+        
+        # Get user info
+        uid = decoded_token['uid']
+        email = decoded_token.get('email', '')
+        name = decoded_token.get('name', '')
+        if not name:
+            name = email.split('@')[0]
+            
+        print(f"Google register: User info - UID: {uid}, Email: {email}, Name: {name}")
+        
+        # Check if user exists in our database
+        user_data = user_manager.get_user_by_email(email)
+        print(f"Google register: User data from database: {user_data}")
+        
+        if user_data:
+            # User exists, set session data
+            print(f"Google register: User exists, setting session data")
+            session['user_id'] = user_data['id']
+            session['user_email'] = user_data['email']
+            session['user_name'] = user_data['name']
+            session['user_role'] = user_data['role']
+            
+            # Update last login
+            user_manager.update_last_login(user_data['id'])
+            
+            return jsonify({'success': True, 'redirect': url_for('index')})
+        else:
+            # User doesn't exist, need to complete registration
+            print(f"Google register: User doesn't exist, redirecting to complete registration")
+            return jsonify({
+                'success': True,
+                'redirect': url_for('google_complete_registration', token=token)
+            })
+        
+    except Exception as e:
+        import traceback
+        print(f"Google register error: {str(e)}")
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'Authentication failed: {str(e)}'})
+
+
+@app.route('/api/user/profile', methods=['GET'])
+@login_required
+def get_user_profile():
+    """Get the current user's profile"""
+    user_id = session.get('user_id')
+    user_data = user_manager.get_user(user_id)
+    
+    if not user_data:
+        return jsonify({'success': False, 'error': 'User not found'})
+    
+    # Remove sensitive information
+    user_data.pop('provider_id', None)
+    
+    return jsonify({'success': True, 'user': user_data})
 
 
 @app.route('/api/courses')
@@ -112,6 +607,14 @@ def get_courses():
     if os.path.exists(MATERIALS_DIR):
         courses = [d for d in os.listdir(MATERIALS_DIR) 
                  if os.path.isdir(os.path.join(MATERIALS_DIR, d))]
+    
+    # Filter courses for students
+    if 'user_id' in session:
+        user_data = user_manager.get_user(session['user_id'])
+        if user_data and user_data.get('role') == 'student':
+            user_courses = user_data.get('courses', [])
+            if user_courses:
+                courses = [c for c in courses if c in user_courses]
     
     return jsonify({'courses': courses})
 
@@ -774,6 +1277,85 @@ def call_vision_model(system_prompt, user_question, image_path):
     print("Vision API response received successfully")
     
     return result['choices'][0]['message']['content']
+
+# Debug route to check Firebase initialization
+@app.route('/debug/firebase')
+def debug_firebase():
+    """Debug route to check Firebase initialization status"""
+    try:
+        from firebase_config import auth, firebase_config
+        
+        debug_info = {
+            'firebase_initialized': firebase_initialized,
+            'auth_available': auth is not None,
+            'config_keys': list(firebase_config.keys()) if firebase_config else []
+        }
+        
+        # Test auth connection
+        if auth:
+            try:
+                # Just try to access a method to see if it works
+                auth.current_user
+                debug_info['auth_connection'] = 'OK'
+            except Exception as e:
+                debug_info['auth_connection'] = f'Error: {str(e)}'
+        
+        return jsonify(debug_info)
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'firebase_initialized': firebase_initialized
+        })
+
+@app.route('/debug/session')
+def debug_session():
+    """Debug route to check session data"""
+    session_data = {
+        'user_id': session.get('user_id', None),
+        'user_email': session.get('user_email', None),
+        'user_name': session.get('user_name', None),
+        'user_role': session.get('user_role', None),
+        'is_authenticated': 'user_id' in session
+    }
+    
+    # Get user data if authenticated
+    if 'user_id' in session:
+        user_data = user_manager.get_user(session['user_id'])
+        if user_data:
+            session_data['user_data'] = user_data
+    
+    return jsonify(session_data)
+
+@app.route('/debug/google-auth')
+def debug_google_auth():
+    """Debug route to check Google auth configuration"""
+    try:
+        from firebase_config import check_google_auth_config
+        
+        # Check google auth configuration
+        google_auth_status = check_google_auth_config()
+        
+        # Get browser login domains
+        authorized_domains = []
+        try:
+            from firebase_config import firebase
+            if firebase:
+                auth_settings = firebase._auth_provider._get_project_config()
+                authorized_domains = auth_settings.get('authorizedDomains', [])
+        except Exception as e:
+            authorized_domains = [f"Error getting authorized domains: {str(e)}"]
+        
+        debug_info = {
+            'google_auth_config': google_auth_status,
+            'authorized_domains': authorized_domains,
+            'current_domain': request.host
+        }
+        
+        return jsonify(debug_info)
+    except Exception as e:
+        return jsonify({
+            'error': str(e)
+        })
 
 if __name__ == '__main__':
     # Create HTML templates and static files

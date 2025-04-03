@@ -36,14 +36,99 @@
             padding: 1rem 0;
             margin-top: 2rem;
         }
+        .create-course-card {
+            background-color: #f8e8e8;
+            border: 2px dashed #c41230;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+        .create-course-card:hover {
+            background-color: #f0d0d0;
+        }
+        .create-icon {
+            font-size: 3rem;
+            color: #c41230;
+            margin-bottom: 1rem;
+        }
+        .nav-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .user-info {
+            display: flex;
+            align-items: center;
+            color: white;
+        }
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #c41230;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 0.5rem;
+            font-weight: 500;
+        }
+        .header-btns .btn {
+            margin-left: 0.5rem;
+        }
+        .role-badge {
+            background-color: #c41230;
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            margin-left: 0.5rem;
+        }
     </style>
 </head>
 <body>
     <div class="page-transition"></div>
-    <div class="header text-center">
+    <div class="header">
         <div class="container">
-            <h1 class="display-4"><i class="bi bi-mortarboard-fill me-2"></i>Ellie</h1>
-            <p class="lead">Carnegie Mellon University's AI Teaching Assistant</p>
+            <div class="nav-header">
+                <h1 class="display-4"><i class="bi bi-mortarboard-fill me-2"></i>Ellie</h1>
+                
+                <div class="header-btns">
+                    <!-- Right side buttons -->
+                    <!-- Debug info: Auth status: {{ is_authenticated }}, User: {{ user }} -->
+                    {% if is_authenticated and user %}
+                        <div class="user-info">
+                            <div class="user-avatar">
+                                {% if user.name %}{{ user.name[0] | upper }}{% else %}U{% endif %}
+                            </div>
+                            <div>
+                                <div>{{ user.name if user.name else 'User' }}</div>
+                                <small>
+                                    {{ user.email if user.email else '' }}
+                                    <span class="role-badge">{{ user.role if user.role else 'guest' }}</span>
+                                </small>
+                            </div>
+                            <a href="{{ url_for('logout') }}" class="btn btn-outline-light btn-sm ms-3">
+                                <i class="bi bi-box-arrow-right me-1"></i> Logout
+                            </a>
+                        </div>
+                    {% else %}
+                        <div>
+                            <a href="{{ url_for('login') }}" class="btn btn-outline-light">
+                                <i class="bi bi-box-arrow-in-right me-1"></i> Log In
+                            </a>
+                            <a href="{{ url_for('register') }}" class="btn btn-outline-light ms-2">
+                                <i class="bi bi-person-plus me-1"></i> Register
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            <p class="lead text-center mt-2">Carnegie Mellon University's AI Teaching Assistant</p>
         </div>
     </div>
 
@@ -55,44 +140,6 @@
                         <h2 class="mb-3">Welcome to Ellie</h2>
                         <p class="fs-5">I'm your personal AI teaching assistant for Carnegie Mellon University courses. I can help answer questions, explain concepts, and guide you through your coursework.</p>
                         <p class="fs-5 mb-4">Select a course below to start chatting or create a new course.</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row mb-5">
-            <div class="col-md-8 offset-md-2">
-                <div class="card">
-                    <div class="card-body p-4">
-                        <h3 class="card-title mb-3"><i class="bi bi-plus-circle me-2"></i>Create New Course</h3>
-                        <form id="createCourseForm">
-                            <div class="mb-3">
-                                <label for="courseId" class="form-label">Course ID (e.g., 15-122, 18-100)</label>
-                                <input type="text" class="form-control" id="courseId" required placeholder="Enter CMU course ID">
-                                <div class="form-text">This will create a folder where you can add course materials.</div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="discipline" class="form-label">Discipline (Optional)</label>
-                                <select class="form-select" id="discipline">
-                                    <option value="">Select discipline (optional)</option>
-                                    <option value="computer_science">Computer Science</option>
-                                    <option value="mathematics">Mathematics</option>
-                                    <option value="engineering">Engineering</option>
-                                    <option value="business">Business</option>
-                                    <option value="humanities">Humanities</option>
-                                    <option value="sciences">Sciences</option>
-                                </select>
-                                <div class="form-text">Selecting a discipline helps Ellie understand your course better.</div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="courseMaterials" class="form-label">Upload Course Materials (Optional)</label>
-                                <input type="file" class="form-control" id="courseMaterials" multiple accept=".pdf,.pptx,.docx,.txt">
-                                <div class="form-text">You can upload PDF, PowerPoint, Word, and text files (max 16MB each).</div>
-                            </div>
-                            <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-plus-lg me-1"></i> Create Course
-                            </button>
-                        </form>
                     </div>
                 </div>
             </div>
@@ -123,6 +170,97 @@
                     </div>
                 </div>
             {% endif %}
+            
+            <!-- Create New Course Card (only shown to professors or when not logged in) -->
+            {% if not is_authenticated or (user and user.role == 'professor') %}
+                <div class="col-md-4 mb-4">
+                    <div class="card course-card create-course-card h-100" id="createCourseCard">
+                        <div class="card-body d-flex flex-column">
+                            <i class="bi bi-plus-circle-fill create-icon"></i>
+                            <h5 class="card-title">Create New Course</h5>
+                            <p class="card-text flex-grow-1">Add a new course to get started with Ellie's teaching assistance.</p>
+                            <button class="btn btn-primary mt-3">
+                                <i class="bi bi-plus-lg me-1"></i> Create Course
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Create Course Modal -->
+    <div class="modal fade" id="createCourseModal" tabindex="-1" aria-labelledby="createCourseModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="createCourseModalLabel"><i class="bi bi-plus-circle me-2"></i>Create New Course</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="createCourseForm">
+                        <div class="mb-3">
+                            <label for="courseId" class="form-label">Course ID (e.g., 15-122, 18-100)</label>
+                            <input type="text" class="form-control" id="courseId" required placeholder="Enter CMU course ID">
+                            <div class="form-text">This will create a folder where you can add course materials.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="discipline" class="form-label">Discipline (Optional)</label>
+                            <select class="form-select" id="discipline">
+                                <option value="">Select discipline (optional)</option>
+                                <option value="computer_science">Computer Science</option>
+                                <option value="mathematics">Mathematics</option>
+                                <option value="engineering">Engineering</option>
+                                <option value="business">Business</option>
+                                <option value="humanities">Humanities</option>
+                                <option value="sciences">Sciences</option>
+                            </select>
+                            <div class="form-text">Selecting a discipline helps Ellie understand your course better.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="courseMaterials" class="form-label">Upload Course Materials (Optional)</label>
+                            <input type="file" class="form-control" id="courseMaterials" multiple accept=".pdf,.pptx,.docx,.txt">
+                            <div class="form-text">You can upload PDF, PowerPoint, Word, and text files (max 16MB each).</div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="submitCourseBtn">
+                        <i class="bi bi-plus-lg me-1"></i> Create Course
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Reminder Modal (shown to anonymous users) -->
+    <div class="modal fade" id="loginReminderModal" tabindex="-1" aria-labelledby="loginReminderModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="loginReminderModalLabel"><i class="bi bi-person-circle me-2"></i>Sign In Recommended</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Creating a course as a professor requires an account. Would you like to sign in or create an account?</p>
+                    <p>This will allow you to:</p>
+                    <ul>
+                        <li>Create and manage courses</li>
+                        <li>Track your conversation history</li>
+                        <li>Access professor-only features</li>
+                    </ul>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Continue as Guest</button>
+                    <a href="{{ url_for('login') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-box-arrow-in-right me-1"></i> Log In
+                    </a>
+                    <a href="{{ url_for('register') }}" class="btn btn-primary">
+                        <i class="bi bi-person-plus me-1"></i> Register
+                    </a>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -131,7 +269,7 @@
             <div class="row">
                 <div class="col-md-12">
                     <p><i class="bi bi-mortarboard-fill me-2"></i>Ellie - Carnegie Mellon University AI Teaching Assistant</p>
-                    <p class="mb-0"><small>&copy; 2024 Carnegie Mellon University</small></p>
+                    <p class="mb-0"><small>&copy; {{ '%Y'|now }} Carnegie Mellon University</small></p>
                 </div>
             </div>
         </div>
@@ -140,9 +278,21 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="/static/js/main.js"></script>
     <script>
-        document.getElementById('createCourseForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            
+        // Initialize create course modal
+        const createCourseModal = new bootstrap.Modal(document.getElementById('createCourseModal'));
+        const loginReminderModal = new bootstrap.Modal(document.getElementById('loginReminderModal'));
+        
+        // Show modal when create course card is clicked
+        document.getElementById('createCourseCard').addEventListener('click', function() {
+            {% if is_authenticated %}
+                createCourseModal.show();
+            {% else %}
+                loginReminderModal.show();
+            {% endif %}
+        });
+        
+        // Handle form submission
+        document.getElementById('submitCourseBtn').addEventListener('click', function() {
             const courseId = document.getElementById('courseId').value.trim();
             const discipline = document.getElementById('discipline').value;
             const courseFiles = document.getElementById('courseMaterials').files;
@@ -153,7 +303,7 @@
             }
             
             // Show loading indicator
-            const submitBtn = this.querySelector('button[type="submit"]');
+            const submitBtn = this;
             const originalBtnText = submitBtn.innerHTML;
             submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Creating...';
             submitBtn.disabled = true;
@@ -200,6 +350,7 @@
                 
                 if (data.success) {
                     customSuccess(data.message);
+                    createCourseModal.hide();
                     setTimeout(() => {
                         location.reload();
                     }, 1500);

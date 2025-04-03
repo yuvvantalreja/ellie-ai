@@ -1,0 +1,69 @@
+[
+  {
+    "role": "user",
+    "content": "How do I implement a bloom filter?",
+    "timestamp": 1743649269.348185
+  },
+  {
+    "role": "assistant",
+    "content": "To implement a bloom filter, you'll need to use the Bloom Maker library provided in the course materials. Here's a step-by-step guide to help you get started:\n\n1. **Create a Bloom Maker**: First, you need to create a Bloom Maker with a specific capacity using the `bloommaker_new` function. This function takes an integer `capacity` as an argument and returns a `bmk_t` (Bloom Maker type) object. [ref1]\n\n```c\nbmk_t B = bloommaker_new(capacity);\n```\n\n2. **Add hash functions**: Next, you need to add one or more hash functions to the Bloom Maker using the `bloommaker_addhash` function. This function takes a `bmk_t` object and a `hash_fn*` (hash function pointer) as arguments.\n\n```c\nvoid bloommaker_addhash(bmk_t B, hash_fn* h);\n```\n\nYou can add multiple hash functions to the Bloom Maker.\n\n3. **Freeze the Bloom Maker**: Once you've added all the necessary hash functions, you need to freeze the Bloom Maker using the `bloommaker_freeze` function. This function takes a `bmk_t` object as an argument.\n\n```c\nvoid bloommaker_freeze(bmk_t B);\n```\n\nFreezing the Bloom Maker ensures that no more hash functions can be added to it.\n\n4. **Use the Bloom Filter**: After freezing the Bloom Maker, you can use it as a generic Bloom Filter. You can add elements to the Bloom Filter using the `bloommaker_add` function and check if an element is present using the `bloommaker_contains` function.\n\n```c\nvoid bloommaker_add(bmk_t B, elem x);\nbool bloommaker_contains(bmk_t B, elem x);\n```\n\nNote that the `bloommaker_contains` function may return false positives (i.e., it may incorrectly indicate that an element is present), but it will never return false negatives (i.e., it will always correctly indicate that an element is not present). [ref4]\n\nFor more information on implementing a Bloom Filter, you can refer to the course materials, specifically the sections on Bloom Filters and the Bloom Maker library. If you need more guidance, you can also consult with your instructor or teaching assistant.\n\nReferences:\n\n[ref1] 15-122 Programming Homework 7, Page 12 of 13\n[ref4] 15-122 Programming Homework 7, Page 2 of 13",
+    "timestamp": 1743649269.348454
+  },
+  {
+    "role": "user",
+    "content": "How do I implement a bloom filter?",
+    "timestamp": 1743649269.348657
+  },
+  {
+    "role": "assistant",
+    "content": "To implement a bloom filter, you'll need to use the Bloom Maker library provided in the course materials. Here's a step-by-step guide to help you get started:\n\n1. **Create a Bloom Maker**: First, you need to create a Bloom Maker with a specific capacity using the `bloommaker_new` function. This function takes an integer `capacity` as an argument and returns a `bmk_t` (Bloom Maker type) object. [ref1]\n\n```c\nbmk_t B = bloommaker_new(capacity);\n```\n\n2. **Add hash functions**: Next, you need to add one or more hash functions to the Bloom Maker using the `bloommaker_addhash` function. This function takes a `bmk_t` object and a `hash_fn*` (hash function pointer) as arguments.\n\n```c\nvoid bloommaker_addhash(bmk_t B, hash_fn* h);\n```\n\nYou can add multiple hash functions to the Bloom Maker.\n\n3. **Freeze the Bloom Maker**: Once you've added all the necessary hash functions, you need to freeze the Bloom Maker using the `bloommaker_freeze` function. This function takes a `bmk_t` object as an argument.\n\n```c\nvoid bloommaker_freeze(bmk_t B);\n```\n\nFreezing the Bloom Maker ensures that no more hash functions can be added to it.\n\n4. **Use the Bloom Filter**: After freezing the Bloom Maker, you can use it as a generic Bloom Filter. You can add elements to the Bloom Filter using the `bloommaker_add` function and check if an element is present using the `bloommaker_contains` function.\n\n```c\nvoid bloommaker_add(bmk_t B, elem x);\nbool bloommaker_contains(bmk_t B, elem x);\n```\n\nNote that the `bloommaker_contains` function may return false positives (i.e., it may incorrectly indicate that an element is present), but it will never return false negatives (i.e., it will always correctly indicate that an element is not present). [ref4]\n\nFor more information on implementing a Bloom Filter, you can refer to the course materials, specifically the sections on Bloom Filters and the Bloom Maker library. If you need more guidance, you can also consult with your instructor or teaching assistant.\n\nReferences:\n\n[ref1] 15-122 Programming Homework 7, Page 12 of 13\n[ref4] 15-122 Programming Homework 7, Page 2 of 13",
+    "timestamp": 1743649269.348782,
+    "references": [
+      {
+        "id": "ref1",
+        "doc_id": "1e8037a29d33295b33488a697d3de8c4",
+        "chunk_id": "1e8037a29d33295b33488a697d3de8c4_0",
+        "source": "course_materials/15-122/bloom (1).pdf",
+        "score": 0.6281633377075195,
+        "page": 11,
+        "title": ""
+      },
+      {
+        "id": "ref2",
+        "doc_id": "1e8037a29d33295b33488a697d3de8c4",
+        "chunk_id": "1e8037a29d33295b33488a697d3de8c4_1",
+        "source": "course_materials/15-122/bloom (1).pdf",
+        "score": 0.6480381488800049,
+        "page": 11,
+        "title": ""
+      },
+      {
+        "id": "ref3",
+        "doc_id": "1e8037a29d33295b33488a697d3de8c4",
+        "chunk_id": "1e8037a29d33295b33488a697d3de8c4_2",
+        "source": "course_materials/15-122/bloom (1).pdf",
+        "score": 0.9047317504882812,
+        "page": 10,
+        "title": ""
+      },
+      {
+        "id": "ref4",
+        "doc_id": "1e8037a29d33295b33488a697d3de8c4",
+        "chunk_id": "1e8037a29d33295b33488a697d3de8c4_3",
+        "source": "course_materials/15-122/bloom (1).pdf",
+        "score": 0.9241329431533813,
+        "page": 1,
+        "title": ""
+      },
+      {
+        "id": "ref5",
+        "doc_id": "1e8037a29d33295b33488a697d3de8c4",
+        "chunk_id": "1e8037a29d33295b33488a697d3de8c4_4",
+        "source": "course_materials/15-122/bloom (1).pdf",
+        "score": 0.9862971305847168,
+        "page": 5,
+        "title": ""
+      }
+    ]
+  }
+]

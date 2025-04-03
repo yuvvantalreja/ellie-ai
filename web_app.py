@@ -18,11 +18,14 @@ from conversation_manager import ConversationManager
 from feedback_system import FeedbackSystem
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
+from flask_cors import CORS  # Import Flask-CORS
 
 # Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
+# Configure CORS explicitly
+CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 app.secret_key = os.getenv("SECRET_KEY", "ellie-cmu-ai-assistant-secret-key")
 
 # Add template filters
@@ -778,4 +781,4 @@ def call_vision_model(system_prompt, user_question, image_path):
 if __name__ == '__main__':
     # Create HTML templates and static files
     print("Creating templates directory and HTML files...")
-    app.run(debug=True, port=5000) 
+    app.run(debug=True, port=5001) 

@@ -16,6 +16,9 @@ from course_rag import CourseRAG
 from course_prompts import CoursePromptManager
 from conversation_manager import ConversationManager
 from feedback_system import FeedbackSystem
+import sys
+# Add the current directory to the path to ensure imports work
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from users import UserManager
 from firebase_config import initialize_firebase, get_firebase_error_message, login_required, role_required
 from dotenv import load_dotenv

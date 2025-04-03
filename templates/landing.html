@@ -27,6 +27,13 @@
             height: 100%;
             background: url('/static/images/pattern.svg');
             opacity: 0.1;
+            z-index: 0;
+            pointer-events: none;
+        }
+        
+        .hero .container {
+            position: relative;
+            z-index: 1;
         }
         
         .feature-card {
@@ -116,10 +123,10 @@
                     <p class="lead fs-3 mb-4">Carnegie Mellon University's AI Teaching Assistant</p>
                     <p class="mb-5">Leveraging artificial intelligence to enhance learning experiences and provide personalized educational support.</p>
                     <div class="d-flex">
-                        <a href="{{ url_for('login') }}" class="btn nav-btn login-btn">
+                        <a href="{{ url_for('login') }}" class="btn btn-outline-light nav-btn login-btn">
                             <i class="bi bi-box-arrow-in-right me-2"></i>Log In
                         </a>
-                        <a href="{{ url_for('register') }}" class="btn nav-btn register-btn">
+                        <a href="{{ url_for('register') }}" class="btn btn-light nav-btn register-btn">
                             <i class="bi bi-person-plus me-2"></i>Sign Up
                         </a>
                     </div>

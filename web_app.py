@@ -13,13 +13,13 @@ import base64
 import requests
 import numpy as np
 from course_rag import CourseRAG
-from course_prompts import CoursePromptManager
 from conversation_manager import ConversationManager
 from feedback_system import FeedbackSystem
 import sys
 # Add the current directory to the path to ensure imports work
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+
 try:
     from users import UserManager
 except ImportError:
@@ -50,8 +50,6 @@ def filter_now(format_='%Y'):
 rag_instances = {}
 rag_locks = {}  # Locks to prevent concurrent access to RAG instances
 
-# Initialize shared components
-prompt_manager = CoursePromptManager()
 conversation_manager = ConversationManager()
 feedback_system = FeedbackSystem()
 user_manager = UserManager()
@@ -70,7 +68,7 @@ os.makedirs("static/js", exist_ok=True)
 os.makedirs("static/images", exist_ok=True)
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Configure app
+# Configure appz
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload size
 
@@ -100,11 +98,6 @@ def get_user_id():
     if 'user_id' in session:
         # Return authenticated user ID
         return session['user_id']
-    else:
-        # Create anonymous user ID for the session
-        if 'anonymous_id' not in session:
-            session['anonymous_id'] = str(uuid.uuid4())
-        return session['anonymous_id']
 
 
 @app.route('/')
@@ -114,12 +107,10 @@ def index():
     user_data = None
     is_authenticated = 'user_id' in session
     
-    print(f"Session data in index route: {session}")
     print(f"Is authenticated: {is_authenticated}")
     
     if is_authenticated:
         user_data = user_manager.get_user(session['user_id'])
-        print(f"User data: {user_data}")
         courses = []
         
         # Get list of course directories
@@ -145,7 +136,6 @@ def index():
 
 @app.route('/landing')
 def landing():
-    """Render the landing page for unauthenticated users"""
     # If user is already logged in, redirect to index
     if 'user_id' in session:
         return redirect(url_for('index'))
@@ -664,8 +654,8 @@ def ask_question():
     rag = get_rag_instance(course_id, data.get('discipline'))
     
     try:
-        # Get answer from RAG system
-        answer, references = rag.answer_question(question, user_id)
+        # Get answer from agentic RAG system (router + web search)
+        answer, references = rag.answer_question_agentic(question, user_id)
         
         # Convert references to JSON serializable format
         references = make_json_serializable(references)
@@ -673,25 +663,35 @@ def ask_question():
         # Format the references for the UI
         formatted_refs = []
         for i, ref in enumerate(references):
-            # Skip references with invalid doc_id
-            if not ref.get("doc_id") or ref.get("doc_id") == "unknown":
-                continue
-                
             ref_text = f"[ref{i+1}]"
-            page_or_slide = None
-            if 'page' in ref:
-                page_or_slide = ref['page']
-            elif 'slide' in ref:
-                page_or_slide = ref['slide']
-                
-            formatted_refs.append({
-                "id": ref_text,
-                "doc_id": ref.get("doc_id", ""),
-                "source": os.path.basename(ref.get("source", "")),
-                "page_or_slide": page_or_slide,
-                "title": ref.get("title", ""),
-                "subtitle": ref.get("page_title", ref.get("slide_title", ""))
-            })
+            ref_type = ref.get("ref_type")
+            if ref_type == "web":
+                formatted_refs.append({
+                    "id": ref_text,
+                    "ref_type": "web",
+                    "url": ref.get("url", ""),
+                    "domain": ref.get("domain", ""),
+                    "title": ref.get("title", ""),
+                    "snippet": ref.get("snippet", ""),
+                })
+            else:
+                # Course doc reference
+                if not ref.get("doc_id") or ref.get("doc_id") == "unknown":
+                    continue
+                page_or_slide = None
+                if 'page' in ref:
+                    page_or_slide = ref['page']
+                elif 'slide' in ref:
+                    page_or_slide = ref['slide']
+                formatted_refs.append({
+                    "id": ref_text,
+                    "ref_type": "course_doc",
+                    "doc_id": ref.get("doc_id", ""),
+                    "source": os.path.basename(ref.get("source", "")),
+                    "page_or_slide": page_or_slide,
+                    "title": ref.get("title", ""),
+                    "subtitle": ref.get("page_title", ref.get("slide_title", ""))
+                })
         
         # Save the conversation with references
         conversation_manager.add_message(course_id, user_id, "user", question)
@@ -703,6 +703,47 @@ def ask_question():
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/route_decision_stream', methods=['GET'])
+def route_decision_stream():
+    """SSE endpoint: stream a quick router decision so UI can reflect web-search intent early."""
+    course_id = request.args.get('course_id')
+    question = request.args.get('question') or ''
+    user_id = get_user_id()
+    discipline = request.args.get('discipline')
+
+    if not course_id or not question:
+        return jsonify({"error": "Missing required parameters"}), 400
+
+    rag = get_rag_instance(course_id, discipline)
+
+    def generate():
+        try:
+            # Use internal components to avoid adding new helpers
+            rag._ensure_agentic_components()  # type: ignore[attr-defined]
+            history = rag.conversation_manager.get_conversation_history(course_id, user_id)
+            docs_with_scores = rag._retrieve_docs_with_scores(question, k=3)  # type: ignore[attr-defined]
+            decision = rag._router.route(  # type: ignore[attr-defined]
+                course_id=course_id,
+                query=question,
+                history=history if isinstance(history, list) else [],
+                docs_with_scores=docs_with_scores,
+            )
+            k_web = int(decision.get('k_web', 0) or 0)
+            used_web = k_web > 0 and bool(decision.get('web_queries') or [])
+            payload = json.dumps({"used_web": used_web})
+            yield f"data: {payload}\n\n"
+            # Indicate completion of the stream
+            yield "data: {\"done\": true}\n\n"
+        except Exception as e:
+            err = json.dumps({"error": str(e)})
+            yield f"data: {err}\n\n"
+
+    headers = {
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",  # Disable buffering on some reverse proxies
+    }
+    return Response(generate(), mimetype='text/event-stream', headers=headers)
 
 
 @app.route('/api/history', methods=['GET'])
@@ -737,75 +778,6 @@ def clear_history():
     
     return jsonify({'success': success})
 
-
-@app.route('/api/feedback', methods=['POST'])
-def submit_feedback():
-    """API endpoint to submit feedback"""
-    data = request.json
-    course_id = data.get('course_id')
-    question = data.get('question')
-    answer = data.get('answer')
-    rating = data.get('rating')
-    comment = data.get('comment')
-    
-    if not all([course_id, question, answer, rating]):
-        return jsonify({'error': 'Missing required fields'}), 400
-    
-    # Validate rating
-    try:
-        rating = int(rating)
-        if not 1 <= rating <= 5:
-            raise ValueError("Rating must be between 1 and 5")
-    except ValueError:
-        return jsonify({'error': 'Rating must be an integer between 1 and 5'}), 400
-    
-    # Get user ID from session
-    user_id = get_user_id()
-    
-    try:
-        rag = get_rag_instance(course_id)
-        feedback = rag.add_feedback(user_id, question, answer, rating, comment)
-        
-        return jsonify({'success': True, 'feedback': feedback})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/feedback/report', methods=['GET'])
-def get_feedback_report():
-    """API endpoint to get feedback report"""
-    course_id = request.args.get('course_id')
-    
-    if not course_id:
-        return jsonify({'error': 'Course ID is required'}), 400
-    
-    try:
-        rag = get_rag_instance(course_id)
-        report = rag.generate_feedback_report()
-        
-        return jsonify({'report': report})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/feedback/export', methods=['GET'])
-def export_feedback():
-    """API endpoint to export feedback data"""
-    course_id = request.args.get('course_id')
-    
-    if not course_id:
-        return jsonify({'error': 'Course ID is required'}), 400
-    
-    try:
-        rag = get_rag_instance(course_id)
-        csv_file = rag.export_feedback()
-        
-        if not csv_file or not os.path.exists(csv_file):
-            return jsonify({'error': 'No feedback data available'}), 404
-        
-        return send_file(csv_file, as_attachment=True, download_name=f"{course_id}_feedback.csv")
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/update_materials', methods=['POST'])
@@ -882,7 +854,6 @@ def create_course():
     """API endpoint to create a new course"""
     data = request.json
     course_id = data.get('course_id')
-    discipline = data.get('discipline')
     
     if not course_id:
         return jsonify({'error': 'Course ID is required'}), 400
@@ -892,55 +863,12 @@ def create_course():
         course_dir = os.path.join(MATERIALS_DIR, course_id)
         os.makedirs(course_dir, exist_ok=True)
         
-        # Create course-specific prompt if discipline is provided
-        if discipline:
-            template = prompt_manager.get_prompt_template(discipline=discipline)
-            prompt_manager.save_prompt_template(course_id, template)
-        
         return jsonify({
             'success': True, 
             'message': f'Course {course_id} created successfully. Add materials to {course_dir}'
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/prompts/<course_id>', methods=['GET'])
-def get_course_prompt(course_id):
-    """API endpoint to get course prompt template"""
-    try:
-        template = prompt_manager.get_prompt_template(course_id)
-        return jsonify({'template': template})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/prompts/<course_id>', methods=['POST'])
-def update_course_prompt(course_id):
-    """API endpoint to update course prompt template"""
-    data = request.json
-    
-    if not data:
-        return jsonify({'error': 'Prompt template data is required'}), 400
-    
-    try:
-        prompt_manager.save_prompt_template(course_id, data)
-        return jsonify({'success': True, 'message': 'Prompt template updated successfully'})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/instructor/<course_id>')
-def instructor_dashboard(course_id):
-    """Render the instructor dashboard for a course"""
-    try:
-        rag = get_rag_instance(course_id)
-        report = rag.generate_feedback_report()
-        template = prompt_manager.get_prompt_template(course_id)
-        
-        return render_template('instructor.html', course_id=course_id, report=report, template=template)
-    except Exception as e:
-        return render_template('error.html', error=str(e))
 
 
 @app.route('/api/document/<course_id>/<doc_id>', methods=['GET'])
@@ -1166,8 +1094,12 @@ def ask_question_with_image():
             if question.strip():
                 rag_context, _ = rag.get_context(question, user_id)
             
-            # Prepare prompt with course context
-            system_prompt = f"You are Ellie, an AI Teaching Assistant for course {course_id}. Answer the student's question based on the image they've shared and your knowledge of the course material."
+            # Prepare prompt with shared core instructions
+            try:
+                from prompts import ANSWER_CORE_INSTRUCTIONS
+                system_prompt = ANSWER_CORE_INSTRUCTIONS.format(course_id=course_id)
+            except Exception:
+                system_prompt = f"You are Ellie, an AI Teaching Assistant for course {course_id}. Prefer course materials when sufficient; otherwise use available information. Always cite sources as [refN]."
             
             if rag_context:
                 system_prompt += f"\n\nHere is relevant information from the course materials that may help you answer:\n{rag_context}"
@@ -1193,7 +1125,7 @@ def ask_question_with_image():
             })
         else:
             print("No image path, falling back to text-only response")
-            # If no image, use the regular RAG-based approach
+            # If no image, use the unified agentic approach
             answer, references = rag.answer_question(question, user_id)
             
             # Convert references to JSON serializable format
@@ -1290,85 +1222,6 @@ def call_vision_model(system_prompt, user_question, image_path):
     print("Vision API response received successfully")
     
     return result['choices'][0]['message']['content']
-
-# Debug route to check Firebase initialization
-@app.route('/debug/firebase')
-def debug_firebase():
-    """Debug route to check Firebase initialization status"""
-    try:
-        from firebase_config import auth, firebase_config
-        
-        debug_info = {
-            'firebase_initialized': firebase_initialized,
-            'auth_available': auth is not None,
-            'config_keys': list(firebase_config.keys()) if firebase_config else []
-        }
-        
-        # Test auth connection
-        if auth:
-            try:
-                # Just try to access a method to see if it works
-                auth.current_user
-                debug_info['auth_connection'] = 'OK'
-            except Exception as e:
-                debug_info['auth_connection'] = f'Error: {str(e)}'
-        
-        return jsonify(debug_info)
-    except Exception as e:
-        return jsonify({
-            'error': str(e),
-            'firebase_initialized': firebase_initialized
-        })
-
-@app.route('/debug/session')
-def debug_session():
-    """Debug route to check session data"""
-    session_data = {
-        'user_id': session.get('user_id', None),
-        'user_email': session.get('user_email', None),
-        'user_name': session.get('user_name', None),
-        'user_role': session.get('user_role', None),
-        'is_authenticated': 'user_id' in session
-    }
-    
-    # Get user data if authenticated
-    if 'user_id' in session:
-        user_data = user_manager.get_user(session['user_id'])
-        if user_data:
-            session_data['user_data'] = user_data
-    
-    return jsonify(session_data)
-
-@app.route('/debug/google-auth')
-def debug_google_auth():
-    """Debug route to check Google auth configuration"""
-    try:
-        from firebase_config import check_google_auth_config
-        
-        # Check google auth configuration
-        google_auth_status = check_google_auth_config()
-        
-        # Get browser login domains
-        authorized_domains = []
-        try:
-            from firebase_config import firebase
-            if firebase:
-                auth_settings = firebase._auth_provider._get_project_config()
-                authorized_domains = auth_settings.get('authorizedDomains', [])
-        except Exception as e:
-            authorized_domains = [f"Error getting authorized domains: {str(e)}"]
-        
-        debug_info = {
-            'google_auth_config': google_auth_status,
-            'authorized_domains': authorized_domains,
-            'current_domain': request.host
-        }
-        
-        return jsonify(debug_info)
-    except Exception as e:
-        return jsonify({
-            'error': str(e)
-        })
 
 if __name__ == '__main__':
     # Create HTML templates and static files

@@ -18,3 +18,5 @@ pyyaml
 werkzeug
 pyrebase4
 firebase-admin 
+tavily-python
+trafilatura

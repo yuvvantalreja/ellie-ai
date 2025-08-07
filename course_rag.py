@@ -30,8 +30,10 @@ import pathlib
 
 # Import new components
 from conversation_manager import ConversationManager
-from course_prompts import CoursePromptManager
 from feedback_system import FeedbackSystem
+from router import QueryRouter
+from web_search import WebSearchClient
+from prompts import ANSWER_PROMPT, ANSWER_CORE_INSTRUCTIONS
 
 # Load environment variables
 load_dotenv()
@@ -74,14 +76,35 @@ class CourseRAG:
         # Initialize conversation manager
         self.conversation_manager = ConversationManager()
         
-        # Initialize prompt manager
-        self.prompt_manager = CoursePromptManager()
-        
         # Initialize feedback system
         self.feedback_system = FeedbackSystem()
         
         # Build the RAG chain
         self.rag_chain = self._build_rag_chain()
+
+        # Agentic components (lazy)
+        self._router: Optional[QueryRouter] = None
+        self._web: Optional[WebSearchClient] = None
+
+    @staticmethod
+    def _make_json_serializable(obj: Any) -> Any:
+        """Convert NumPy types and nested structures to Python native types."""
+        try:
+            import numpy as _np  # local import to avoid hard dependency elsewhere
+        except Exception:  # pragma: no cover
+            _np = None
+
+        if _np is not None and isinstance(obj, (_np.float32, _np.float64)):
+            return float(obj)
+        if _np is not None and isinstance(obj, (_np.int32, _np.int64)):
+            return int(obj)
+        if _np is not None and isinstance(obj, _np.ndarray):
+            return obj.tolist()
+        if isinstance(obj, dict):
+            return {k: CourseRAG._make_json_serializable(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [CourseRAG._make_json_serializable(v) for v in obj]
+        return obj
     
     def _create_embeddings(self):
         """Create embeddings using a local HuggingFace model"""
@@ -105,7 +128,7 @@ class CourseRAG:
             model_name=model_name
         )
     
-    def _load_documents(self):
+    def _load_documents(self) -> List[Document]:
         """Load all documents from the course materials directory"""
         logger.info(f"Loading documents for course {self.course_id}")
         
@@ -402,6 +425,11 @@ class CourseRAG:
             context_docs.append(context_text)
         
         return "\n\n".join(context_docs), references
+
+    def _retrieve_docs_with_scores(self, query: str, k: int = 5):
+        if not hasattr(self, 'vectorstore') or self.vectorstore is None:
+            self._initialize_vectorstore()
+        return self.vectorstore.similarity_search_with_score(query, k=k)
     
     def get_context(self, query, user_id="anonymous", top_k=5):
         """Retrieve context for a query without generating an answer
@@ -431,23 +459,8 @@ class CourseRAG:
     def _build_rag_chain(self):
         """Build the RAG chain for answering questions"""
         
-        # Create a proper prompt template
-        prompt_template = ChatPromptTemplate.from_template("""
-        You are an AI teaching assistant for the course {course_id}.
-        
-        Use the following context from course materials to answer the student's question:
-        
-        {context}
-        
-        Previous conversation history:
-        {conversation_history}
-        
-        Student question: {query}
-        
-        Provide a clear, accurate, and helpful response. If the context doesn't contain the answer, 
-        say so honestly and suggest where the student might find more information.
-        For any information you cite from the course materials, include a reference like [ref1], [ref2], etc.
-        """)
+        # Shared answer prompt
+        prompt_template = ANSWER_PROMPT
         
         # Create a function to retrieve and format the context
         def retrieve_and_format_context(inputs):
@@ -471,6 +484,7 @@ class CourseRAG:
             )
             | {
                 "answer": lambda x: answer_chain.invoke({
+                    "answer_core_instructions": ANSWER_CORE_INSTRUCTIONS,
                     "context": x["formatted_inputs"]["context"],
                     "query": x["formatted_inputs"]["query"],
                     "course_id": x["formatted_inputs"]["course_id"],
@@ -483,56 +497,129 @@ class CourseRAG:
         return rag_chain
     
     def answer_question(self, question, user_id="anonymous"):
-        """Answer a question using the RAG system
-        
-        Args:
-            question: The question to answer
-            user_id: Identifier for the user asking the question
-            
-        Returns:
-            Tuple of (answer, references) where references is a list of source documents
+        """Unified answering method (router + course + optional web)."""
+        return self.answer_question_agentic(question, user_id)
+
+    def _ensure_agentic_components(self):
+        if self._router is None:
+            self._router = QueryRouter()
+        if self._web is None:
+            self._web = WebSearchClient()
+
+    def answer_question_agentic(self, question: str, user_id: str = "anonymous") -> Tuple[str, List[Dict[str, Any]]]:
+        """Agentic answering with a router deciding to use course docs, web, or both.
+
+        Returns (answer, references) with unified refs including web.
         """
-        if not hasattr(self, 'rag_chain') or self.rag_chain is None:
-            self._build_rag_chain()
-            
-        logger.info(f"Answering question for course {self.course_id}: {question}")
-            
-        # Get conversation history
+        self._ensure_agentic_components()
+
+        logger.info(f"Agentic answering for course {self.course_id}: {question}")
+
+        # History for router
         history = self.conversation_manager.get_conversation_history(self.course_id, user_id)
-        
-        # Run the chain
+
+        # Preview top-3 for router
+        docs_with_scores = self._retrieve_docs_with_scores(question, k=3)
+
+        # Route
+        decision = self._router.route(
+            course_id=self.course_id,
+            query=question,
+            history=history if isinstance(history, list) else [],
+            docs_with_scores=docs_with_scores,
+        )
+
+        k_course = max(0, int(decision.get("k_course", 4)))
+        k_web = max(0, int(decision.get("k_web", 0)))
+        web_queries = decision.get("web_queries", []) if isinstance(decision.get("web_queries", []), list) else []
+
+        # Retrieve course docs (k_course)
+        course_docs_with_scores = []
+        if k_course > 0:
+            course_docs_with_scores = self._retrieve_docs_with_scores(question, k=k_course)
+        course_context_texts = []
+        course_refs: List[Dict[str, Any]] = []
+        for i, (doc, score) in enumerate(course_docs_with_scores):
+            ref_id = f"ref{i+1}"
+            meta = doc.metadata or {}
+            doc_id = meta.get('doc_id') or (self._generate_doc_id(meta['source']) if meta.get('source') else 'unknown')
+            ref = {
+                'id': ref_id,
+                'ref_type': 'course_doc',
+                'doc_id': doc_id,
+                'chunk_id': meta.get('chunk_id', f"{doc_id}_{i}"),
+                'source': meta.get('source', ''),
+                'score': score,
+            }
+            if 'page' in meta:
+                ref['page'] = meta['page']
+            if 'slide' in meta:
+                ref['slide'] = meta['slide']
+            if 'title' in meta:
+                ref['title'] = meta['title']
+            if 'page_title' in meta:
+                ref['page_title'] = meta['page_title']
+            if 'slide_title' in meta:
+                ref['slide_title'] = meta['slide_title']
+            course_refs.append(ref)
+            course_context_texts.append(f"{doc.page_content} [Source: {ref_id}]")
+
+        web_refs: List[Dict[str, Any]] = []
+        web_context_texts: List[str] = []
+        if k_web > 0 and web_queries:
+            web_results = self._web.search_batch(web_queries, k_each=max(1, min(3, k_web)))
+            start_idx = len(course_refs)
+            for j, item in enumerate(web_results[:k_web]):
+                ref_id = f"ref{start_idx + j + 1}"
+                web_ref = {
+                    'id': ref_id,
+                    'ref_type': 'web',
+                    'url': item.get('url', ''),
+                    'domain': item.get('domain', ''),
+                    'title': item.get('title', ''),
+                    'snippet': item.get('snippet', ''),
+                    'published_at': item.get('published_at'),
+                    'score': item.get('score'),
+                    'doc_id': 'web',  # placeholder for UI compatibility
+                }
+                web_refs.append(web_ref)
+                # Keep snippets short to save tokens
+                snippet = (item.get('snippet') or '')
+                web_context_texts.append(f"{snippet} [Source: {ref_id}]\nURL: {item.get('url','')}")
+
+        # Compose final context (interleave: course first, then web)
+        context = "\n\n".join(course_context_texts + web_context_texts)
+
+        # Build prompt and get answer with the existing LLM
+        prompt_template = ANSWER_PROMPT
+
+        answer_chain = prompt_template | self.llm | StrOutputParser()
         try:
-            result = self.rag_chain.invoke({
-                "query": question,
-                "conversation_history": history if history else "No prior conversation.",
-                "course_id": self.course_id
-            })
-            
-            # Extract answer and references directly from the result
-            answer = result["answer"]
-            references = result["references"]
-            
-            # Add user question to history, then add the response
-            self.conversation_manager.add_message(
-                course_id=self.course_id,
-                user_id=user_id,
-                role="user",
-                content=question
+            answer = answer_chain.invoke(
+                {
+                    "answer_core_instructions": ANSWER_CORE_INSTRUCTIONS,
+                    "course_id": self.course_id,
+                    "context": context,
+                    "conversation_history": history if history else "No prior conversation.",
+                    "query": question,
+                }
             )
 
-            # Add AI response to history
+            references = course_refs + web_refs
+
+            # Persist conversation with refs
             self.conversation_manager.add_message(
-                course_id=self.course_id,
-                user_id=user_id,
-                role="assistant",
-                content=answer
+                course_id=self.course_id, user_id=user_id, role="user", content=question
             )
-            
+            safe_refs = CourseRAG._make_json_serializable(references)
+            self.conversation_manager.add_message(
+                course_id=self.course_id, user_id=user_id, role="assistant", content=answer, references=safe_refs
+            )
+
             return answer, references
-            
         except Exception as e:
-            logger.error(f"Error answering question: {str(e)}")
-            return "I'm sorry, I encountered an error while processing your question. Please try again.", []
+            logger.error(f"Agentic answer error: {str(e)}")
+            return "I'm sorry, I ran into an issue answering that. Please try again.", []
     
     def add_feedback(self, user_id, question, answer, rating, comment=None):
         """Add feedback for a question-answer pair

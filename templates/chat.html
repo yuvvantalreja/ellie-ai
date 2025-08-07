@@ -307,14 +307,29 @@
                         <div class="message-time" id="current-time"></div>
                     </div>
                 </div>
+                {% if web_search %}
                 <div id="thinking" class="thinking d-none">
-                    <span>Ellie is thinking</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16">
+                        <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/>
+                      </svg>
+                    <span id="thinking-text">Searching the Web</span>
                     <div class="dots">
                         <div class="dot"></div>
                         <div class="dot"></div>
                         <div class="dot"></div>
                     </div>
                 </div>
+                {% else %}
+                <div id="thinking" class="thinking d-none">
+                    <span id="thinking-text">Ellie is thinking</span>
+                    <div class="dots">
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                    </div>
+                </div>
+                {% endif %}
+
                 <form id="question-form" class="mt-2">
                     <div class="input-group">
                         <input type="text" id="question" class="form-control" placeholder="Ask a question about {{ course_id }}..."
@@ -614,6 +629,7 @@
         const questionForm = document.getElementById('question-form');
         const questionInput = document.getElementById('question');
         const thinkingIndicator = document.getElementById('thinking');
+        const thinkingText = document.getElementById('thinking-text');
         const documentSide = document.getElementById('documentSide');
         const documentContent = document.getElementById('documentContent');
         const documentTitle = document.getElementById('documentTitle');
@@ -919,6 +935,31 @@
             
             // Show thinking indicator
             thinkingIndicator.classList.remove('d-none');
+            let sse;
+            try {
+                // Open a short-lived SSE to learn if web search will be used
+                const params = new URLSearchParams({
+                    course_id: '{{ course_id }}',
+                    question: question
+                });
+                sse = new EventSource(`/api/route_decision_stream?${params.toString()}`);
+                sse.onmessage = (evt) => {
+                    try {
+                        const msg = JSON.parse(evt.data || '{}');
+                        if (msg.used_web === true) {
+                            thinkingText.textContent = 'Searching the Web';
+                        }
+                        if (msg.done === true || msg.error) {
+                            sse.close();
+                        }
+                    } catch (_) {
+                        // no-op
+                    }
+                };
+                sse.onerror = () => {
+                    try { sse.close(); } catch (_) {}
+                };
+            } catch (_) { /* ignore */ }
             
             try {
                 // Prepare form data for submission
@@ -956,6 +997,7 @@
                 
                 // Hide thinking indicator
                 thinkingIndicator.classList.add('d-none');
+                try { if (sse) sse.close(); } catch (_) {}
                 
                 if (data.error) {
                     // Show error message
@@ -991,7 +1033,11 @@
                                 const refInfo = references.find(ref => ref.id === `[ref${refNum}]`);
                                 
                                 if (refInfo) {
-                                    loadDocumentByRef(refInfo);
+                                    if (refInfo.ref_type === 'web' && refInfo.url) {
+                                        window.open(refInfo.url, '_blank');
+                                    } else {
+                                        loadDocumentByRef(refInfo);
+                                    }
                                 }
                             });
                         });
@@ -1006,6 +1052,7 @@
                 
                 // Hide thinking indicator
                 thinkingIndicator.classList.add('d-none');
+                try { if (sse) sse.close(); } catch (_) {}
                 
                 // Show error message
                 const errorMessage = document.createElement('div');
@@ -1075,27 +1122,38 @@
                             
                             // Add references if available
                             if (msg.references && msg.references.length > 0) {
-                                // Filter for document references (not image references)
-                                const docRefs = msg.references.filter(ref => ref.doc_id && ref.doc_id !== "unknown");
+                                // Map and include both course and web refs
+                                const docRefs = msg.references.filter(ref => (ref.ref_type === 'web') || (ref.doc_id && ref.doc_id !== "unknown"));
                                 
                                 if (docRefs.length > 0) {
                                     const formattedRefs = docRefs.map((ref, i) => {
                                         const refText = `[ref${i+1}]`;
-                                        let page_or_slide = null;
-                                        if ('page' in ref) {
-                                            page_or_slide = ref.page;
-                                        } else if ('slide' in ref) {
-                                            page_or_slide = ref.slide;
+                                        if (ref.ref_type === 'web') {
+                                            return {
+                                                id: refText,
+                                                ref_type: 'web',
+                                                url: ref.url,
+                                                domain: ref.domain,
+                                                title: ref.title || ref.domain || 'Link',
+                                                snippet: ref.snippet || ''
+                                            };
+                                        } else {
+                                            let page_or_slide = null;
+                                            if ('page' in ref) {
+                                                page_or_slide = ref.page;
+                                            } else if ('slide' in ref) {
+                                                page_or_slide = ref.slide;
+                                            }
+                                            return {
+                                                id: refText,
+                                                ref_type: 'course_doc',
+                                                doc_id: ref.doc_id,
+                                                source: ref.source ? ref.source.split('/').pop() : "",
+                                                page_or_slide: page_or_slide,
+                                                title: ref.title || "",
+                                                subtitle: ref.page_title || ref.slide_title || ""
+                                            };
                                         }
-                                        
-                                        return {
-                                            id: refText,
-                                            doc_id: ref.doc_id,
-                                            source: ref.source ? ref.source.split('/').pop() : "",
-                                            page_or_slide: page_or_slide,
-                                            title: ref.title || "",
-                                            subtitle: ref.page_title || ref.slide_title || ""
-                                        };
                                     });
                                     
                                     messageDiv.dataset.references = JSON.stringify(formattedRefs);
@@ -1116,7 +1174,11 @@
                                 const refInfo = references.find(ref => ref.id === `[ref${refNum}]`);
                                 
                                 if (refInfo) {
-                                    loadDocumentByRef(refInfo);
+                                    if (refInfo.ref_type === 'web' && refInfo.url) {
+                                        window.open(refInfo.url, '_blank');
+                                    } else {
+                                        loadDocumentByRef(refInfo);
+                                    }
                                 }
                             }
                         });

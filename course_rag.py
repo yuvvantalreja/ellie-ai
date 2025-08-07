@@ -30,7 +30,6 @@ import pathlib
 
 # Import new components
 from conversation_manager import ConversationManager
-from feedback_system import FeedbackSystem
 from router import QueryRouter
 from web_search import WebSearchClient
 from prompts import ANSWER_PROMPT, ANSWER_CORE_INSTRUCTIONS
@@ -75,9 +74,6 @@ class CourseRAG:
         
         # Initialize conversation manager
         self.conversation_manager = ConversationManager()
-        
-        # Initialize feedback system
-        self.feedback_system = FeedbackSystem()
         
         # Build the RAG chain
         self.rag_chain = self._build_rag_chain()
@@ -456,57 +452,7 @@ class CourseRAG:
             logger.error(f"Error getting context: {str(e)}")
             return "", []
     
-    def _build_rag_chain(self):
-        """Build the RAG chain for answering questions"""
-        
-        # Shared answer prompt
-        prompt_template = ANSWER_PROMPT
-        
-        # Create a function to retrieve and format the context
-        def retrieve_and_format_context(inputs):
-            query = inputs["query"]
-            context_text, references = self._retrieve_context(query)
-            return {
-                "context": context_text,
-                "references": references,
-                "query": query,
-                "course_id": inputs.get("course_id", self.course_id),
-                "conversation_history": inputs.get("conversation_history", "No prior conversation.")
-            }
-        
-        # Define a chain for generating the answer
-        answer_chain = prompt_template | self.llm | StrOutputParser()
-        
-        # Build the RAG chain
-        rag_chain = (
-            RunnablePassthrough.assign(
-                formatted_inputs=retrieve_and_format_context
-            )
-            | {
-                "answer": lambda x: answer_chain.invoke({
-                    "answer_core_instructions": ANSWER_CORE_INSTRUCTIONS,
-                    "context": x["formatted_inputs"]["context"],
-                    "query": x["formatted_inputs"]["query"],
-                    "course_id": x["formatted_inputs"]["course_id"],
-                    "conversation_history": x["formatted_inputs"]["conversation_history"]
-                }),
-                "references": lambda x: x["formatted_inputs"]["references"]
-            }
-        )
-        
-        return rag_chain
-    
-    def answer_question(self, question, user_id="anonymous"):
-        """Unified answering method (router + course + optional web)."""
-        return self.answer_question_agentic(question, user_id)
-
-    def _ensure_agentic_components(self):
-        if self._router is None:
-            self._router = QueryRouter()
-        if self._web is None:
-            self._web = WebSearchClient()
-
-    def answer_question_agentic(self, question: str, user_id: str = "anonymous") -> Tuple[str, List[Dict[str, Any]]]:
+    def answer_question(self, question: str, user_id: str = "anonymous") -> Tuple[str, List[Dict[str, Any]]]:
         """Agentic answering with a router deciding to use course docs, web, or both.
 
         Returns (answer, references) with unified refs including web.
@@ -620,44 +566,13 @@ class CourseRAG:
         except Exception as e:
             logger.error(f"Agentic answer error: {str(e)}")
             return "I'm sorry, I ran into an issue answering that. Please try again.", []
-    
-    def add_feedback(self, user_id, question, answer, rating, comment=None):
-        """Add feedback for a question-answer pair
         
-        Args:
-            user_id: Student identifier
-            question: The student's question
-            answer: The assistant's answer
-            rating: Numeric rating (1-5)
-            comment: Optional text comment
-            
-        Returns:
-            The recorded feedback entry
-        """
-        return self.feedback_system.add_feedback(
-            course_id=self.course_id,
-            user_id=user_id,
-            question=question,
-            answer=answer,
-            rating=rating,
-            comment=comment
-        )
-    
-    def generate_feedback_report(self):
-        """Generate a report on feedback for this course
-        
-        Returns:
-            Report data dictionary
-        """
-        return self.feedback_system.generate_course_report(self.course_id)
-    
-    def export_feedback(self):
-        """Export feedback data to CSV
-        
-        Returns:
-            Path to the exported CSV file
-        """
-        return self.feedback_system.export_feedback_to_csv(self.course_id)
+    def _ensure_agentic_components(self):
+        if self._router is None:
+            self._router = QueryRouter()
+        if self._web is None:
+            self._web = WebSearchClient()
+
     
     def clear_conversation_history(self, user_id):
         """Clear conversation history for a user

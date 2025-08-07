@@ -14,7 +14,6 @@ import requests
 import numpy as np
 from course_rag import CourseRAG
 from conversation_manager import ConversationManager
-from feedback_system import FeedbackSystem
 import sys
 # Add the current directory to the path to ensure imports work
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -51,7 +50,6 @@ rag_instances = {}
 rag_locks = {}  # Locks to prevent concurrent access to RAG instances
 
 conversation_manager = ConversationManager()
-feedback_system = FeedbackSystem()
 user_manager = UserManager()
 
 # Initialize Firebase
@@ -655,7 +653,7 @@ def ask_question():
     
     try:
         # Get answer from agentic RAG system (router + web search)
-        answer, references = rag.answer_question_agentic(question, user_id)
+        answer, references = rag.answer_question(question, user_id)
         
         # Convert references to JSON serializable format
         references = make_json_serializable(references)

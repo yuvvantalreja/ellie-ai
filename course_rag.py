@@ -74,9 +74,6 @@ class CourseRAG:
         
         # Initialize conversation manager
         self.conversation_manager = ConversationManager()
-        
-        # Build the RAG chain
-        self.rag_chain = self._build_rag_chain()
 
         # Agentic components (lazy)
         self._router: Optional[QueryRouter] = None
@@ -601,9 +598,6 @@ class CourseRAG:
         
         # Get all documents matching the doc_id
         matching_docs = []
-        
-        # This is a simplified approach; in a production system, you might want 
-        # to implement a separate database for more efficient document retrieval
         
         # We need to reload the documents since we don't have direct access to the chunks in the vectorstore
         documents = self._load_documents()

@@ -301,12 +301,15 @@
         <div class="chat-side">
             <div class="chat-container">
                 <div class="messages-container" id="messages">
-                    <div class="message assistant-message">
-                        <h5>Ellie</h5>
-                        <p>Hello! I'm Ellie, your AI Teaching Assistant for {{ course_id }}. How can I help you today?</p>
-                        <div class="message-time" id="current-time"></div>
+                    <div class="messages-inner" id="messages-inner">
+                        <div class="message assistant-message">
+                            <h5>Ellie</h5>
+                            <p>Hello! I'm Ellie, your AI Teaching Assistant for {{ course_id }}. How can I help you today?</p>
+                            <div class="message-time" id="current-time"></div>
+                        </div>
                     </div>
                 </div>
+                <div class="messages-inner">
                 {% if web_search %}
                 <div id="thinking" class="thinking d-none">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16">
@@ -353,6 +356,7 @@
                         <i class="bi bi-info-circle-fill me-1"></i> You can upload an image and I can help analyze it
                     </small>
                 </form>
+                </div>
             </div>
         </div>
         
@@ -578,6 +582,7 @@
     <script>
         const courseId = "{{ course_id }}";
         const messagesContainer = document.getElementById('messages');
+        const messagesInner = document.getElementById('messages-inner');
         const questionForm = document.getElementById('question-form');
         const questionInput = document.getElementById('question');
         const thinkingIndicator = document.getElementById('thinking');
@@ -876,7 +881,7 @@
             
             userMessageContent += `<div class="message-time">${formatTime()}</div>`;
             userMessage.innerHTML = userMessageContent;
-            messagesContainer.appendChild(userMessage);
+            messagesInner.appendChild(userMessage);
             
             // Clear input, image and scroll to bottom
             questionInput.value = '';
@@ -960,7 +965,7 @@
                         <p>Sorry, I encountered an error: ${data.error}</p>
                         <div class="message-time">${formatTime()}</div>
                     `;
-                    messagesContainer.appendChild(errorMessage);
+                    messagesInner.appendChild(errorMessage);
                 } else {
                     // Process response with references
                     const assistantMessage = document.createElement('div');
@@ -970,7 +975,7 @@
                         <div>${processMarkdown(data.answer)}</div>
                         <div class="message-time">${formatTime()}</div>
                     `;
-                    messagesContainer.appendChild(assistantMessage);
+                    messagesInner.appendChild(assistantMessage);
                     
                     // Store references data
                     if (data.references && data.references.length > 0) {
@@ -1014,7 +1019,7 @@
                     <p>Sorry, there was an error processing your request: ${error.message}</p>
                     <div class="message-time">${formatTime()}</div>
                 `;
-                messagesContainer.appendChild(errorMessage);
+                messagesInner.appendChild(errorMessage);
                 messagesContainer.scrollTop = messagesContainer.scrollHeight;
             }
         });
@@ -1036,8 +1041,8 @@
             .then(response => response.json())
             .then(data => {
                 if (data.history && data.history.length) {
-                    // Clear welcome message if there's history
-                    messagesContainer.innerHTML = '';
+                    // Clear welcome message content but keep the inner wrapper
+                    messagesInner.innerHTML = '';
                     
                     // Add conversation history
                     data.history.forEach(msg => {
@@ -1113,7 +1118,7 @@
                             }
                         }
                         
-                        messagesContainer.appendChild(messageDiv);
+                        messagesInner.appendChild(messageDiv);
                     });
                     
                     // Add click handlers for reference badges

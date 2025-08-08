@@ -90,17 +90,26 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 1rem;
+  width: 100%;
+  margin: 0;
+  padding: 0;
 }
 
 .messages-container {
   flex: 1;
   overflow-y: auto;
   margin-bottom: 1rem;
-  padding: 1rem;
+  padding: 0;
   max-height: calc(100vh - 250px);
+  width: 100%;
+}
+
+/* Centered inner column for messages and composer */
+.messages-inner {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1rem;
 }
 
 .message {
